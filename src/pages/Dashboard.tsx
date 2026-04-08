@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Student } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Activity, Target, LineChart, FileText, Users } from 'lucide-react';
+import { Activity, Target, LineChart, History, Users } from 'lucide-react';
 import { useNavigate } from 'react-router';
 
 export const Dashboard = () => {
@@ -142,8 +142,8 @@ export const Dashboard = () => {
                         className="h-14 rounded-2xl flex flex-col items-center justify-center gap-1 bg-white col-span-2"
                         onClick={() => navigate(`/student/${student.id}/history`)}
                       >
-                        <FileText className="w-5 h-5 text-primary" />
-                        <span className="text-xs">Audit Log</span>
+                        <History className="w-5 h-5 text-primary" />
+                        <span className="text-xs">History</span>
                       </Button>
                     </div>
                   </CardContent>

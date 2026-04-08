@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, where } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { UserProfile, Student, Role } from '../types';
+import { UserProfile, Student, Role, Goal, DataPoint } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Edit2, Save, X, Trash2, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
 
 export const AdminPanel = () => {
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -25,6 +26,11 @@ export const AdminPanel = () => {
     firstName: '', lastName: '', studentId: '', roomNumber: '', status: 'active'
   });
 
+  const [allGoals, setAllGoals] = useState<Goal[]>([]);
+  const [allDataPoints, setAllDataPoints] = useState<DataPoint[]>([]);
+  const [complianceTarget, setComplianceTarget] = useState(2);
+  const [complianceMonth, setComplianceMonth] = useState(format(new Date(), 'yyyy-MM'));
+
   useEffect(() => {
     const qUsers = query(collection(db, 'users'));
     const unsubUsers = onSnapshot(qUsers, (snapshot) => {
@@ -40,11 +46,38 @@ export const AdminPanel = () => {
       setStudents(studentsData);
     });
 
+    const qGoals = query(collection(db, 'goals'), where('status', '==', 'active'));
+    const unsubGoals = onSnapshot(qGoals, (snapshot) => {
+      const goalsData: Goal[] = [];
+      snapshot.forEach((doc) => goalsData.push({ id: doc.id, ...doc.data() } as Goal));
+      setAllGoals(goalsData);
+    });
+
     return () => {
       unsubUsers();
       unsubStudents();
+      unsubGoals();
     };
   }, []);
+
+  useEffect(() => {
+    if (!complianceMonth) return;
+    const [year, month] = complianceMonth.split('-');
+    const startDate = new Date(parseInt(year), parseInt(month) - 1, 1).toISOString();
+    const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59).toISOString();
+
+    const qData = query(
+      collection(db, 'dataPoints'),
+      where('timestamp', '>=', startDate),
+      where('timestamp', '<=', endDate)
+    );
+    const unsubData = onSnapshot(qData, (snapshot) => {
+      const dp: DataPoint[] = [];
+      snapshot.forEach((doc) => dp.push({ id: doc.id, ...doc.data() } as DataPoint));
+      setAllDataPoints(dp);
+    });
+    return () => unsubData();
+  }, [complianceMonth]);
 
   const handleSaveUser = async (id: string) => {
     try {
@@ -108,6 +141,7 @@ export const AdminPanel = () => {
         <TabsList className="rounded-full h-12 p-1 mb-6">
           <TabsTrigger value="students" className="rounded-full px-8">Students</TabsTrigger>
           <TabsTrigger value="users" className="rounded-full px-8">Staff & Users</TabsTrigger>
+          <TabsTrigger value="compliance" className="rounded-full px-8">Compliance</TabsTrigger>
         </TabsList>
 
         <TabsContent value="students" className="space-y-6">
@@ -333,6 +367,86 @@ export const AdminPanel = () => {
                         </tr>
                       );
                     })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="compliance" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold">Data Collection Compliance</h2>
+            <div className="flex gap-4 items-center">
+              <div className="flex items-center gap-2">
+                <Label className="whitespace-nowrap">Target / Month:</Label>
+                <Input type="number" value={complianceTarget} onChange={e => setComplianceTarget(parseInt(e.target.value) || 0)} className="w-20" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label>Month:</Label>
+                <Input type="month" value={complianceMonth} onChange={e => setComplianceMonth(e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+          <Card className="border-0 shadow-md">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-muted-foreground uppercase bg-muted/50">
+                    <tr>
+                      <th className="px-6 py-4">Room</th>
+                      <th className="px-6 py-4">Student</th>
+                      <th className="px-6 py-4">Goal</th>
+                      <th className="px-6 py-4">Data Points</th>
+                      <th className="px-6 py-4">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(
+                      students.reduce((acc, student) => {
+                        if (!acc[student.roomNumber]) acc[student.roomNumber] = [];
+                        acc[student.roomNumber].push(student);
+                        return acc;
+                      }, {} as Record<string, Student[]>)
+                    ).sort(([roomA], [roomB]) => roomA.localeCompare(roomB)).map(([room, roomStudents]) => (
+                      <React.Fragment key={room}>
+                        {roomStudents.map(student => {
+                          const studentGoals = allGoals.filter(g => g.studentId === student.id);
+                          if (studentGoals.length === 0) {
+                            return (
+                              <tr key={student.id} className="border-b last:border-0 hover:bg-muted/20">
+                                <td className="px-6 py-4 font-medium">{room}</td>
+                                <td className="px-6 py-4">{student.firstName} {student.lastName}</td>
+                                <td className="px-6 py-4 text-muted-foreground italic" colSpan={3}>No active goals</td>
+                              </tr>
+                            );
+                          }
+                          return studentGoals.map((goal, index) => {
+                            const goalDataPoints = allDataPoints.filter(dp => dp.goalId === goal.id);
+                            const count = goalDataPoints.length;
+                            const isCompliant = count >= complianceTarget;
+                            return (
+                              <tr key={goal.id} className="border-b last:border-0 hover:bg-muted/20">
+                                {index === 0 && (
+                                  <>
+                                    <td className="px-6 py-4 font-medium" rowSpan={studentGoals.length}>{room}</td>
+                                    <td className="px-6 py-4" rowSpan={studentGoals.length}>{student.firstName} {student.lastName}</td>
+                                  </>
+                                )}
+                                <td className="px-6 py-4 truncate max-w-[200px]" title={goal.title}>{goal.title}</td>
+                                <td className="px-6 py-4 font-mono">{count}</td>
+                                <td className="px-6 py-4">
+                                  <span className={`px-2 py-1 rounded-md text-xs font-medium ${isCompliant ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                    {isCompliant ? 'Compliant' : 'Needs Data'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          });
+                        })}
+                      </React.Fragment>
+                    ))}
                   </tbody>
                 </table>
               </div>

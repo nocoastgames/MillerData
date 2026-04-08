@@ -159,6 +159,19 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
     }));
   };
 
+  const handleIEPReview = async () => {
+    if (!confirm('Are you sure you want to archive all active goals? This is typically done during an IEP review.')) return;
+    try {
+      const activeGoals = goals.filter(g => g.status === 'active');
+      const promises = activeGoals.map(g => updateDoc(doc(db, 'goals', g.id), { status: 'archived' }));
+      await Promise.all(promises);
+      toast.success('All active goals have been archived.');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'goals');
+      toast.error('Failed to archive goals');
+    }
+  };
+
   if (isBankView) {
     return (
       <div className="max-w-5xl mx-auto space-y-6">
@@ -244,10 +257,16 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
               <TabsTrigger value="active" className="rounded-full px-6">Active Goals</TabsTrigger>
               <TabsTrigger value="archived" className="rounded-full px-6">Archived</TabsTrigger>
             </TabsList>
-            <Button onClick={() => setIsBuilding(true)} className="rounded-full h-12 px-6">
-              <Plus className="w-5 h-5 mr-2" />
-              Add Goal
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleIEPReview} className="rounded-full h-12 px-6 text-amber-600 border-amber-200 hover:bg-amber-50">
+                <Archive className="w-5 h-5 mr-2" />
+                IEP Review (Archive All)
+              </Button>
+              <Button onClick={() => setIsBuilding(true)} className="rounded-full h-12 px-6">
+                <Plus className="w-5 h-5 mr-2" />
+                Add Goal
+              </Button>
+            </div>
           </div>
 
           <TabsContent value="active" className="space-y-4">

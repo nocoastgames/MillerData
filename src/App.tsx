@@ -10,7 +10,6 @@ import { MassEntry } from './pages/MassEntry';
 import { GoalManagement } from './pages/GoalManagement';
 import { ProgressGraph } from './pages/ProgressGraph';
 import { AdminPanel } from './pages/AdminPanel';
-import { AuditLog } from './pages/AuditLog';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -51,7 +50,7 @@ export default function App() {
               <Route path="student/:studentId/mass" element={<MassEntry />} />
               <Route path="student/:studentId/goals" element={<GoalManagement />} />
               <Route path="student/:studentId/graph" element={<ProgressGraph />} />
-              <Route path="student/:studentId/history" element={<AuditLog />} />
+              <Route path="student/:studentId/history" element={<ProgressGraph isHistory />} />
               <Route path="goals" element={<GoalManagement isBankView />} />
               <Route path="admin" element={
                 <ProtectedRoute requiredRole="admin">
