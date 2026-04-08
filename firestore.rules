@@ -1,0 +1,155 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+        request.auth.token.email == "mrenegar@gmail.com"
+      );
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
+    }
+
+    function isPara() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'para';
+    }
+
+    function isEditor() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'editor';
+    }
+
+    function hasRoomAccess(roomNumber) {
+      return isAdmin() || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roomNumber == roomNumber);
+    }
+
+    function getStudentRoom(studentId) {
+      return get(/databases/$(database)/documents/students/$(studentId)).data.roomNumber;
+    }
+
+    function hasStudentAccess(studentId) {
+      return isAdmin() || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roomNumber == getStudentRoom(studentId));
+    }
+
+    function hasOnlyAllowedFields(allowedFields) {
+      return request.resource.data.keys().hasOnly(allowedFields);
+    }
+
+    function hasRequiredFields(requiredFields) {
+      return request.resource.data.keys().hasAll(requiredFields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['name', 'email', 'role', 'roomNumber', 'status']) &&
+             hasRequiredFields(['name', 'email', 'role', 'roomNumber', 'status']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             data.role in ['admin', 'teacher', 'para', 'editor'] &&
+             data.roomNumber is string && data.roomNumber.size() < 50 &&
+             data.status in ['active', 'inactive'];
+    }
+
+    function isValidStudent(data) {
+      return hasOnlyAllowedFields(['firstName', 'lastName', 'studentId', 'roomNumber', 'status']) &&
+             hasRequiredFields(['firstName', 'lastName', 'studentId', 'roomNumber', 'status']) &&
+             data.firstName is string && data.firstName.size() > 0 && data.firstName.size() < 100 &&
+             data.lastName is string && data.lastName.size() > 0 && data.lastName.size() < 100 &&
+             data.studentId is string && data.studentId.size() > 0 && data.studentId.size() < 50 &&
+             data.roomNumber is string && data.roomNumber.size() > 0 && data.roomNumber.size() < 50 &&
+             data.status in ['active', 'archived'];
+    }
+
+    function isValidGoal(data) {
+      return hasOnlyAllowedFields(['studentId', 'title', 'domain', 'trackingType', 'masteryCriteria', 'objectives', 'status']) &&
+             hasRequiredFields(['studentId', 'title', 'domain', 'trackingType', 'masteryCriteria', 'objectives', 'status']) &&
+             data.studentId is string && data.studentId.size() > 0 && data.studentId.size() < 100 &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 500 &&
+             data.domain is string && data.domain.size() > 0 && data.domain.size() < 100 &&
+             data.trackingType in ['percentage', 'frequency', 'duration'] &&
+             data.masteryCriteria is number && data.masteryCriteria >= 0 &&
+             data.objectives is list && data.objectives.size() <= 50 &&
+             data.status in ['active', 'archived'];
+    }
+
+    function isValidDataPoint(data) {
+      return hasOnlyAllowedFields(['studentId', 'goalId', 'objId', 'value', 'timestamp', 'recordedBy', 'recordedByRole', 'actualEntryTimestamp']) &&
+             hasRequiredFields(['studentId', 'goalId', 'objId', 'value', 'timestamp', 'recordedBy', 'recordedByRole', 'actualEntryTimestamp']) &&
+             data.studentId is string && data.studentId.size() > 0 && data.studentId.size() < 100 &&
+             data.goalId is string && data.goalId.size() > 0 && data.goalId.size() < 100 &&
+             data.objId is string && data.objId.size() > 0 && data.objId.size() < 100 &&
+             data.value is number && data.value >= 0 &&
+             data.timestamp is string && data.timestamp.size() > 0 && data.timestamp.size() < 50 &&
+             data.recordedBy is string && data.recordedBy.size() > 0 && data.recordedBy.size() < 100 &&
+             data.recordedByRole is string && data.recordedByRole.size() > 0 && data.recordedByRole.size() < 50 &&
+             data.actualEntryTimestamp is string && data.actualEntryTimestamp.size() > 0 && data.actualEntryTimestamp.size() < 50;
+    }
+
+    function isValidGoalBankItem(data) {
+      return hasOnlyAllowedFields(['title', 'domain', 'trackingType', 'defaultObjectives']) &&
+             hasRequiredFields(['title', 'domain', 'trackingType', 'defaultObjectives']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 500 &&
+             data.domain is string && data.domain.size() > 0 && data.domain.size() < 100 &&
+             data.trackingType in ['percentage', 'frequency', 'duration'] &&
+             data.defaultObjectives is list && data.defaultObjectives.size() <= 50;
+    }
+
+    // ===============================================================
+    // Collections
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (isAdmin() || (request.auth.uid == userId && request.resource.data.role == 'para'));
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (isAdmin() || (request.auth.uid == userId && request.resource.data.role == resource.data.role));
+      allow delete: if isAdmin();
+    }
+
+    match /students/{studentId} {
+      allow read: if isAuthenticated() && hasRoomAccess(resource.data.roomNumber);
+      allow create: if isAdmin() && isValidStudent(request.resource.data);
+      allow update: if isAdmin() && isValidStudent(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /goals/{goalId} {
+      allow read: if isAuthenticated() && hasStudentAccess(resource.data.studentId);
+      allow create: if (isAdmin() || isTeacher()) && isValidGoal(request.resource.data) && hasStudentAccess(request.resource.data.studentId);
+      allow update: if (isAdmin() || isTeacher()) && isValidGoal(request.resource.data) && hasStudentAccess(resource.data.studentId);
+      allow delete: if isAdmin();
+    }
+
+    match /dataPoints/{dataPointId} {
+      allow read: if isAuthenticated() && hasStudentAccess(resource.data.studentId);
+      allow create: if isAuthenticated() && isValidDataPoint(request.resource.data) && hasStudentAccess(request.resource.data.studentId);
+      allow update: if (isAdmin() || isTeacher()) && isValidDataPoint(request.resource.data) && hasStudentAccess(resource.data.studentId);
+      allow delete: if isAdmin() || isTeacher();
+    }
+
+    match /goalBank/{goalBankId} {
+      allow read: if isAuthenticated();
+      allow create: if (isAdmin() || isTeacher()) && isValidGoalBankItem(request.resource.data);
+      allow update: if (isAdmin() || isTeacher()) && isValidGoalBankItem(request.resource.data);
+      allow delete: if isAdmin();
+    }
+  }
+}

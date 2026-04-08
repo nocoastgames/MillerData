@@ -1,0 +1,115 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the application (admin, teacher, para, editor)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "teacher", "para", "editor"] },
+        "roomNumber": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
+      },
+      "required": ["name", "email", "role", "status"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "A student at the school",
+      "type": "object",
+      "properties": {
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "studentId": { "type": "string" },
+        "roomNumber": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "archived"] }
+      },
+      "required": ["firstName", "lastName", "studentId", "roomNumber", "status"]
+    },
+    "Goal": {
+      "title": "Goal",
+      "description": "An IEP goal for a student",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "title": { "type": "string" },
+        "domain": { "type": "string" },
+        "trackingType": { "type": "string", "enum": ["percentage", "frequency", "duration"] },
+        "masteryCriteria": { "type": "number" },
+        "objectives": { 
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" }
+            },
+            "required": ["id", "title"]
+          }
+        },
+        "status": { "type": "string", "enum": ["active", "archived"] }
+      },
+      "required": ["studentId", "title", "domain", "trackingType", "masteryCriteria", "objectives", "status"]
+    },
+    "DataPoint": {
+      "title": "DataPoint",
+      "description": "A recorded data point for a goal objective",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "goalId": { "type": "string" },
+        "objId": { "type": "string" },
+        "value": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "recordedBy": { "type": "string" },
+        "recordedByRole": { "type": "string" },
+        "actualEntryTimestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "goalId", "objId", "value", "timestamp", "recordedBy", "recordedByRole", "actualEntryTimestamp"]
+    },
+    "GoalBankItem": {
+      "title": "GoalBankItem",
+      "description": "A pre-written goal in the goal bank",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "domain": { "type": "string" },
+        "trackingType": { "type": "string", "enum": ["percentage", "frequency", "duration"] },
+        "defaultObjectives": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" }
+            },
+            "required": ["id", "title"]
+          }
+        }
+      },
+      "required": ["title", "domain", "trackingType", "defaultObjectives"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Users of the system"
+    },
+    "/students/{studentId}": {
+      "schema": { "$ref": "#/entities/Student" },
+      "description": "Students in the school"
+    },
+    "/goals/{goalId}": {
+      "schema": { "$ref": "#/entities/Goal" },
+      "description": "Student goals"
+    },
+    "/dataPoints/{dataPointId}": {
+      "schema": { "$ref": "#/entities/DataPoint" },
+      "description": "Recorded data points"
+    },
+    "/goalBank/{goalBankId}": {
+      "schema": { "$ref": "#/entities/GoalBankItem" },
+      "description": "Goal bank items"
+    }
+  }
+}
