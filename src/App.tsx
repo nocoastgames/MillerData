@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
+import { HashRouter, Routes, Route, Navigate } from 'react-router';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
@@ -35,7 +35,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <BrowserRouter>
+        <HashRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
             
@@ -59,7 +59,7 @@ export default function App() {
               } />
             </Route>
           </Routes>
-        </BrowserRouter>
+        </HashRouter>
         <Toaster />
       </AuthProvider>
     </ErrorBoundary>
