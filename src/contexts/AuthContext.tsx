@@ -35,7 +35,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(firebaseUser);
           } else {
             // If it's the specific admin email, create them
-            if (email === 'mrenegar@gmail.com') {
+            if (email === 'mrenegar@gmail.com' || email === 'renegml@nv.ccsd.net') {
               const newProfile: Omit<UserProfile, 'id'> = {
                 name: firebaseUser.displayName || 'Admin User',
                 email: email,

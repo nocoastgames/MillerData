@@ -19,7 +19,8 @@ service cloud.firestore {
       return isAuthenticated() && (
         (exists(/databases/$(database)/documents/users/$(request.auth.token.email)) && 
          get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role == 'admin') ||
-        request.auth.token.email == "mrenegar@gmail.com"
+        request.auth.token.email == "mrenegar@gmail.com" ||
+        request.auth.token.email == "renegml@nv.ccsd.net"
       );
     }
 
