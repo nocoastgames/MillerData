@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, where } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, where, setDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile, Student, Role, Goal, DataPoint } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,11 @@ export const AdminPanel = () => {
   const [isAddingStudent, setIsAddingStudent] = useState(false);
   const [newStudent, setNewStudent] = useState<Partial<Student>>({
     firstName: '', lastName: '', studentId: '', roomNumber: '', status: 'active'
+  });
+
+  const [isAddingUser, setIsAddingUser] = useState(false);
+  const [newUser, setNewUser] = useState<Partial<UserProfile>>({
+    name: '', email: '', role: 'teacher', roomNumber: '', status: 'active'
   });
 
   const [allGoals, setAllGoals] = useState<Goal[]>([]);
@@ -103,6 +108,17 @@ export const AdminPanel = () => {
     }
   };
 
+  const handleDeleteUser = async (id: string) => {
+    if (!confirm('Are you sure you want to permanently delete this user?')) return;
+    try {
+      await deleteDoc(doc(db, 'users', id));
+      toast.success('User deleted');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `users/${id}`);
+      toast.error('Failed to delete user');
+    }
+  };
+
   const handleAddStudent = async () => {
     if (!newStudent.firstName || !newStudent.lastName || !newStudent.studentId || !newStudent.roomNumber) {
       toast.error('Please fill all required fields');
@@ -116,6 +132,29 @@ export const AdminPanel = () => {
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'students');
       toast.error('Failed to add student');
+    }
+  };
+
+  const handleAddUser = async () => {
+    if (!newUser.name || !newUser.email || !newUser.role || !newUser.roomNumber) {
+      toast.error('Please fill all required fields');
+      return;
+    }
+    try {
+      // Use email as document ID
+      const userEmail = newUser.email.toLowerCase().trim();
+      const userDocRef = doc(db, 'users', userEmail);
+      
+      const { id: _, ...userData } = newUser as any;
+      userData.email = userEmail; // Ensure email is lowercase
+      
+      await setDoc(userDocRef, userData);
+      toast.success('User added');
+      setIsAddingUser(false);
+      setNewUser({ name: '', email: '', role: 'teacher', roomNumber: '', status: 'active' });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'users');
+      toast.error('Failed to add user');
     }
   };
 
@@ -272,11 +311,57 @@ export const AdminPanel = () => {
         <TabsContent value="users" className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-semibold">Staff Directory</h2>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted px-3 py-1.5 rounded-full">
-              <ShieldAlert className="w-4 h-4" />
-              Users are automatically added upon first login
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted px-3 py-1.5 rounded-full">
+                <ShieldAlert className="w-4 h-4" />
+                Users must be added here before they can log in
+              </div>
+              <Button onClick={() => setIsAddingUser(true)} className="rounded-full">
+                <Plus className="w-4 h-4 mr-2" /> Add User
+              </Button>
             </div>
           </div>
+
+          {isAddingUser && (
+            <Card className="border-2 border-primary shadow-sm">
+              <CardHeader className="bg-primary/5 pb-4">
+                <CardTitle className="text-lg">Add New User</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label>Name</Label>
+                    <Input value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email</Label>
+                    <Input type="email" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Role</Label>
+                    <select 
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={newUser.role}
+                      onChange={e => setNewUser({...newUser, role: e.target.value as Role})}
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="teacher">Teacher</option>
+                      <option value="para">Para</option>
+                      <option value="editor">Editor</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Room Number</Label>
+                    <Input value={newUser.roomNumber} onChange={e => setNewUser({...newUser, roomNumber: e.target.value})} />
+                  </div>
+                </div>
+                <div className="mt-6 flex justify-end gap-2">
+                  <Button variant="ghost" onClick={() => setIsAddingUser(false)}>Cancel</Button>
+                  <Button onClick={handleAddUser}>Save User</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-0 shadow-md">
             <CardContent className="p-0">
@@ -361,6 +446,9 @@ export const AdminPanel = () => {
                                 <Button variant="ghost" size="icon" onClick={() => { setEditingUserId(user.id); setEditUser(user); }}>
                                   <Edit2 className="w-4 h-4 text-muted-foreground" />
                                 </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(user.id)}>
+                                  <Trash2 className="w-4 h-4 text-destructive" />
+                                </Button>
                               </div>
                             )}
                           </td>
@@ -397,6 +485,7 @@ export const AdminPanel = () => {
                     <tr>
                       <th className="px-6 py-4">Room</th>
                       <th className="px-6 py-4">Student</th>
+                      <th className="px-6 py-4">Category</th>
                       <th className="px-6 py-4">Goal</th>
                       <th className="px-6 py-4">Data Points</th>
                       <th className="px-6 py-4">Status</th>
@@ -418,7 +507,7 @@ export const AdminPanel = () => {
                               <tr key={student.id} className="border-b last:border-0 hover:bg-muted/20">
                                 <td className="px-6 py-4 font-medium">{room}</td>
                                 <td className="px-6 py-4">{student.firstName} {student.lastName}</td>
-                                <td className="px-6 py-4 text-muted-foreground italic" colSpan={3}>No active goals</td>
+                                <td className="px-6 py-4 text-muted-foreground italic" colSpan={4}>No active goals</td>
                               </tr>
                             );
                           }
@@ -434,6 +523,7 @@ export const AdminPanel = () => {
                                     <td className="px-6 py-4" rowSpan={studentGoals.length}>{student.firstName} {student.lastName}</td>
                                   </>
                                 )}
+                                <td className="px-6 py-4 capitalize">{goal.domain}</td>
                                 <td className="px-6 py-4 truncate max-w-[200px]" title={goal.title}>{goal.title}</td>
                                 <td className="px-6 py-4 font-mono">{count}</td>
                                 <td className="px-6 py-4">

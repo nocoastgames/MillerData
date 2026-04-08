@@ -1,19 +1,35 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { GraduationCap } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 export const Login = () => {
   const navigate = useNavigate();
+  const { authError, user, profile } = useAuth();
   const [error, setError] = React.useState('');
 
+  useEffect(() => {
+    if (authError) {
+      setError(authError);
+    }
+  }, [authError]);
+
+  useEffect(() => {
+    if (user && profile) {
+      navigate('/');
+    }
+  }, [user, profile, navigate]);
+
   const handleLogin = async () => {
+    setError('');
     try {
       await signInWithPopup(auth, googleProvider);
-      navigate('/');
+      // We don't navigate here anymore, we let the useEffect handle it
+      // once the auth state is fully resolved and profile is loaded.
     } catch (err: any) {
       setError(err.message || 'Failed to sign in');
     }

@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Student } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Activity, Target, LineChart, History, Users } from 'lucide-react';
+import { Activity, Target, LineChart, History, Users, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router';
 
 export const Dashboard = () => {
