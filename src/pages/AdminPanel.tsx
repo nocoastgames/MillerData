@@ -86,7 +86,13 @@ export const AdminPanel = () => {
 
   const handleSaveUser = async (id: string) => {
     try {
-      const { id: _, ...dataToUpdate } = editUser as any;
+      const dataToUpdate = {
+        name: editUser.name,
+        email: editUser.email?.toLowerCase().trim(),
+        role: editUser.role,
+        roomNumber: editUser.roomNumber,
+        status: editUser.status
+      };
       await updateDoc(doc(db, 'users', id), dataToUpdate);
       toast.success('User updated');
       setEditingUserId(null);
@@ -98,7 +104,13 @@ export const AdminPanel = () => {
 
   const handleSaveStudent = async (id: string) => {
     try {
-      const { id: _, ...dataToUpdate } = editStudent as any;
+      const dataToUpdate = {
+        firstName: editStudent.firstName,
+        lastName: editStudent.lastName,
+        studentId: editStudent.studentId,
+        roomNumber: editStudent.roomNumber,
+        status: editStudent.status
+      };
       await updateDoc(doc(db, 'students', id), dataToUpdate);
       toast.success('Student updated');
       setEditingStudentId(null);
@@ -125,7 +137,14 @@ export const AdminPanel = () => {
       return;
     }
     try {
-      await addDoc(collection(db, 'students'), newStudent);
+      const studentData = {
+        firstName: newStudent.firstName,
+        lastName: newStudent.lastName,
+        studentId: newStudent.studentId,
+        roomNumber: newStudent.roomNumber,
+        status: newStudent.status || 'active'
+      };
+      await addDoc(collection(db, 'students'), studentData);
       toast.success('Student added');
       setIsAddingStudent(false);
       setNewStudent({ firstName: '', lastName: '', studentId: '', roomNumber: '', status: 'active' });
@@ -142,11 +161,16 @@ export const AdminPanel = () => {
     }
     try {
       // Use email as document ID
-      const userEmail = newUser.email.toLowerCase().trim();
+      const userEmail = newUser.email!.toLowerCase().trim();
       const userDocRef = doc(db, 'users', userEmail);
       
-      const { id: _, ...userData } = newUser as any;
-      userData.email = userEmail; // Ensure email is lowercase
+      const userData = {
+        name: newUser.name,
+        email: userEmail,
+        role: newUser.role,
+        roomNumber: newUser.roomNumber,
+        status: newUser.status || 'active'
+      };
       
       await setDoc(userDocRef, userData);
       toast.success('User added');
@@ -213,6 +237,17 @@ export const AdminPanel = () => {
                   <div className="space-y-2">
                     <Label>Room Number</Label>
                     <Input value={newStudent.roomNumber} onChange={e => setNewStudent({...newStudent, roomNumber: e.target.value})} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <select 
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={newStudent.status}
+                      onChange={e => setNewStudent({...newStudent, status: e.target.value as 'active' | 'archived'})}
+                    >
+                      <option value="active">Active</option>
+                      <option value="archived">Archived</option>
+                    </select>
                   </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-2">
@@ -353,6 +388,17 @@ export const AdminPanel = () => {
                   <div className="space-y-2">
                     <Label>Room Number</Label>
                     <Input value={newUser.roomNumber} onChange={e => setNewUser({...newUser, roomNumber: e.target.value})} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <select 
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={newUser.status}
+                      onChange={e => setNewUser({...newUser, status: e.target.value as 'active' | 'inactive'})}
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
                   </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-2">
