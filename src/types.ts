@@ -25,6 +25,11 @@ export interface Objective {
   title: string;
 }
 
+export interface Domain {
+  id: string;
+  name: string;
+}
+
 export interface Goal {
   id: string;
   studentId: string;

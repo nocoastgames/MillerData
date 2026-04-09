@@ -9,19 +9,17 @@ import {
   Library, 
   LogOut, 
   Menu,
-  X,
-  Smartphone
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { APP_VERSION } from '../version';
-import { LinkDeviceModal } from './LinkDeviceModal';
+import { SidebarLinkDevice } from './SidebarLinkDevice';
 
 export const Layout = () => {
   const { profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
-  const [isLinkModalOpen, setIsLinkModalOpen] = React.useState(false);
 
   const handleSignOut = async () => {
     await signOut(auth);
@@ -61,7 +59,7 @@ export const Layout = () => {
           <span className="font-bold text-xl tracking-tight">Miller Data</span>
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-2">
+        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
@@ -81,6 +79,8 @@ export const Layout = () => {
               </Link>
             );
           })}
+          
+          <SidebarLinkDevice />
         </nav>
 
         <div className="p-4 border-t border-primary-foreground/20">
@@ -88,14 +88,6 @@ export const Layout = () => {
             <p className="text-sm font-medium truncate">{profile?.name}</p>
             <p className="text-xs opacity-80 capitalize">{profile?.role} • Rm {profile?.roomNumber}</p>
           </div>
-          <Button 
-            variant="ghost" 
-            className="w-full justify-start text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground rounded-2xl mb-2"
-            onClick={() => setIsLinkModalOpen(true)}
-          >
-            <Smartphone className="w-5 h-5 mr-3" />
-            Link Mobile Device
-          </Button>
           <Button 
             variant="ghost" 
             className="w-full justify-start text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground rounded-2xl"
@@ -124,11 +116,6 @@ export const Layout = () => {
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
-
-      <LinkDeviceModal 
-        isOpen={isLinkModalOpen} 
-        onClose={() => setIsLinkModalOpen(false)} 
-      />
     </div>
   );
 };

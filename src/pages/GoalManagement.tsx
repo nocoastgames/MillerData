@@ -3,16 +3,14 @@ import { useParams, useNavigate } from 'react-router';
 import { collection, query, where, onSnapshot, addDoc, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Goal, Student, GoalBankItem, Objective, TrackingType } from '../types';
+import { Goal, Student, GoalBankItem, Objective, TrackingType, Domain } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Plus, Search, Archive, Target, Library, Trash2, Edit2 } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Archive, Target, Library, Trash2, Edit2, Settings } from 'lucide-react';
 import { toast } from 'sonner';
-
-const DOMAINS = ['Reading', 'Writing', 'Math', 'Speech', 'Communication', 'Personal Care', 'Motor', 'Social', 'Behavioral'];
 
 export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean }) => {
   const { studentId } = useParams();
@@ -22,6 +20,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
   const [student, setStudent] = useState<Student | null>(null);
   const [studentGoals, setStudentGoals] = useState<Goal[]>([]);
   const [goalBank, setGoalBank] = useState<GoalBankItem[]>([]);
+  const [domains, setDomains] = useState<Domain[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDomain, setSelectedDomain] = useState<string>('All');
 
@@ -31,11 +30,37 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
   const [editingBankItemId, setEditingBankItemId] = useState<string | null>(null);
   const [newGoal, setNewGoal] = useState<Partial<Goal>>({
     title: '',
-    domain: 'Reading',
+    domain: '',
     trackingType: 'percentage',
     masteryCriteria: 80,
     objectives: []
   });
+
+  // Domain Management State
+  const [isManagingDomains, setIsManagingDomains] = useState(false);
+  const [newDomainName, setNewDomainName] = useState('');
+
+  useEffect(() => {
+    const qDomains = query(collection(db, 'domains'));
+    const unsubDomains = onSnapshot(qDomains, (snapshot) => {
+      const domainsData: Domain[] = [];
+      snapshot.forEach((doc) => {
+        domainsData.push({ id: doc.id, ...doc.data() } as Domain);
+      });
+      // Sort alphabetically
+      domainsData.sort((a, b) => a.name.localeCompare(b.name));
+      setDomains(domainsData);
+      
+      // Set default domain if none selected
+      if (domainsData.length > 0 && !newGoal.domain) {
+        setNewGoal(prev => ({ ...prev, domain: domainsData[0].name }));
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'domains');
+    });
+
+    return () => unsubDomains();
+  }, []);
 
   useEffect(() => {
     if (studentId && !isBankView) {
@@ -129,7 +154,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
   };
 
   const handleSaveGoal = async () => {
-    if ((!isBuildingBankItem && !studentId) || !newGoal.title || !newGoal.objectives?.length) {
+    if ((!isBuildingBankItem && !studentId) || !newGoal.title || !newGoal.objectives?.length || !newGoal.domain) {
       toast.error('Please complete all required fields and add at least one objective.');
       return;
     }
@@ -173,7 +198,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
       setIsBuilding(false);
       setIsBuildingBankItem(false);
       setEditingBankItemId(null);
-      setNewGoal({ title: '', domain: 'Reading', trackingType: 'percentage', masteryCriteria: 80, objectives: [] });
+      setNewGoal({ title: '', domain: domains[0]?.name || '', trackingType: 'percentage', masteryCriteria: 80, objectives: [] });
     } catch (error) {
       handleFirestoreError(error, isBuildingBankItem ? (editingBankItemId ? OperationType.UPDATE : OperationType.CREATE) : OperationType.CREATE, isBuildingBankItem ? 'goalBank' : 'goals');
       toast.error('Failed to save goal');
@@ -226,7 +251,30 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
     }
   };
 
-  if (isBankView && !isBuilding) {
+  const handleAddDomain = async () => {
+    if (!newDomainName.trim()) return;
+    try {
+      await addDoc(collection(db, 'domains'), { name: newDomainName.trim() });
+      setNewDomainName('');
+      toast.success('Category added');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'domains');
+      toast.error('Failed to add category');
+    }
+  };
+
+  const handleDeleteDomain = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete the category "${name}"? Existing goals will keep this category name, but it won't be available for new goals.`)) return;
+    try {
+      await deleteDoc(doc(db, 'domains', id));
+      toast.success('Category deleted');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `domains/${id}`);
+      toast.error('Failed to delete category');
+    }
+  };
+
+  if (isBankView && !isBuilding && !isManagingDomains) {
     return (
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex justify-between items-center">
@@ -234,16 +282,23 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
             <h1 className="text-3xl font-bold text-foreground">Goal Bank</h1>
             <p className="text-muted-foreground">Browse and manage pre-written IEP goals</p>
           </div>
-          {(profile?.role === 'admin' || profile?.role === 'teacher' || profile?.role === 'editor') && (
-            <Button onClick={() => {
-              setNewGoal({ title: '', domain: 'Reading', trackingType: 'percentage', objectives: [] });
-              setIsBuilding(true);
-              setIsBuildingBankItem(true);
-              setEditingBankItemId(null);
-            }} className="rounded-full">
-              <Plus className="w-4 h-4 mr-2" /> {profile?.role === 'admin' ? 'Add to Bank' : 'Suggest Goal'}
-            </Button>
-          )}
+          <div className="flex gap-2">
+            {(profile?.role === 'admin' || profile?.role === 'editor') && (
+              <Button variant="outline" onClick={() => setIsManagingDomains(true)} className="rounded-full">
+                <Settings className="w-4 h-4 mr-2" /> Categories
+              </Button>
+            )}
+            {(profile?.role === 'admin' || profile?.role === 'teacher' || profile?.role === 'editor') && (
+              <Button onClick={() => {
+                setNewGoal({ title: '', domain: domains[0]?.name || '', trackingType: 'percentage', objectives: [] });
+                setIsBuilding(true);
+                setIsBuildingBankItem(true);
+                setEditingBankItemId(null);
+              }} className="rounded-full">
+                <Plus className="w-4 h-4 mr-2" /> {profile?.role === 'admin' ? 'Add to Bank' : 'Suggest Goal'}
+              </Button>
+            )}
+          </div>
         </div>
 
         <Card className="border-0 shadow-md">
@@ -263,8 +318,8 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
                 value={selectedDomain}
                 onChange={(e) => setSelectedDomain(e.target.value)}
               >
-                <option value="All">All Domains</option>
-                {DOMAINS.map(d => <option key={d} value={d}>{d}</option>)}
+                <option value="All">All Categories</option>
+                {domains.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
               </select>
             </div>
 
@@ -307,6 +362,55 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
               {filteredBank.length === 0 && (
                 <div className="col-span-full py-12 text-center text-muted-foreground">
                   No goals found matching your criteria.
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isManagingDomains) {
+    return (
+      <div className="max-w-3xl mx-auto space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => setIsManagingDomains(false)}>
+            <ArrowLeft className="w-6 h-6" />
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Manage Categories</h1>
+            <p className="text-muted-foreground">Add or remove goal domains/categories</p>
+          </div>
+        </div>
+
+        <Card className="border-0 shadow-md">
+          <CardContent className="p-6">
+            <div className="flex gap-4 mb-8">
+              <Input 
+                placeholder="New category name..." 
+                value={newDomainName}
+                onChange={e => setNewDomainName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddDomain()}
+                className="h-12 rounded-xl"
+              />
+              <Button onClick={handleAddDomain} className="h-12 rounded-xl px-6">
+                <Plus className="w-4 h-4 mr-2" /> Add
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {domains.map(domain => (
+                <div key={domain.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border">
+                  <span className="font-medium">{domain.name}</span>
+                  <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => handleDeleteDomain(domain.id, domain.name)}>
+                    <Trash2 className="w-5 h-5" />
+                  </Button>
+                </div>
+              ))}
+              {domains.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  No categories defined. Add one above.
                 </div>
               )}
             </div>
@@ -423,13 +527,13 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Domain</Label>
+                  <Label>Category (Domain)</Label>
                   <select 
                     className="flex h-12 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm"
                     value={newGoal.domain}
                     onChange={e => setNewGoal({...newGoal, domain: e.target.value})}
                   >
-                    {DOMAINS.map(d => <option key={d} value={d}>{d}</option>)}
+                    {domains.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
                   </select>
                 </div>
                 <div className="space-y-2">

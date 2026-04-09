@@ -12,8 +12,11 @@ service cloud.firestore {
     }
 
     function getResolvedEmail() {
-      let alias = get(/databases/$(database)/documents/userAliases/$(request.auth.token.email));
-      return alias != null ? alias.data.targetEmail : request.auth.token.email;
+      let hasEmail = request.auth != null && request.auth.token != null && 'email' in request.auth.token && request.auth.token.email != null;
+      let tokenEmail = hasEmail ? request.auth.token.email.lower() : '';
+      let aliasExists = tokenEmail != '' ? exists(/databases/$(database)/documents/userAliases/$(tokenEmail)) : false;
+      let aliasDoc = aliasExists ? get(/databases/$(database)/documents/userAliases/$(tokenEmail)) : null;
+      return (aliasDoc != null && 'targetEmail' in aliasDoc.data) ? aliasDoc.data.targetEmail : tokenEmail;
     }
 
     function getUserData() {
@@ -22,7 +25,7 @@ service cloud.firestore {
 
     function isAdmin() {
       let email = getResolvedEmail();
-      return isAuthenticated() && (
+      return isAuthenticated() && email != '' && (
         (exists(/databases/$(database)/documents/users/$(email)) && 
          get(/databases/$(database)/documents/users/$(email)).data.role == 'admin') ||
         email == "mrenegar@gmail.com" ||
@@ -32,22 +35,22 @@ service cloud.firestore {
 
     function isTeacher() {
       let email = getResolvedEmail();
-      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(email)) && get(/databases/$(database)/documents/users/$(email)).data.role == 'teacher';
+      return isAuthenticated() && email != '' && exists(/databases/$(database)/documents/users/$(email)) && get(/databases/$(database)/documents/users/$(email)).data.role == 'teacher';
     }
 
     function isPara() {
       let email = getResolvedEmail();
-      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(email)) && get(/databases/$(database)/documents/users/$(email)).data.role == 'para';
+      return isAuthenticated() && email != '' && exists(/databases/$(database)/documents/users/$(email)) && get(/databases/$(database)/documents/users/$(email)).data.role == 'para';
     }
 
     function isEditor() {
       let email = getResolvedEmail();
-      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(email)) && get(/databases/$(database)/documents/users/$(email)).data.role == 'editor';
+      return isAuthenticated() && email != '' && exists(/databases/$(database)/documents/users/$(email)) && get(/databases/$(database)/documents/users/$(email)).data.role == 'editor';
     }
 
     function hasRoomAccess(roomNumber) {
       let email = getResolvedEmail();
-      return isAdmin() || isEditor() || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(email)) && get(/databases/$(database)/documents/users/$(email)).data.roomNumber == roomNumber);
+      return isAdmin() || isEditor() || (isAuthenticated() && email != '' && exists(/databases/$(database)/documents/users/$(email)) && get(/databases/$(database)/documents/users/$(email)).data.roomNumber == roomNumber);
     }
 
     function getStudentRoom(studentId) {
@@ -56,7 +59,7 @@ service cloud.firestore {
 
     function hasStudentAccess(studentId) {
       let email = getResolvedEmail();
-      return isAdmin() || isEditor() || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(email)) && get(/databases/$(database)/documents/users/$(email)).data.roomNumber == getStudentRoom(studentId));
+      return isAdmin() || isEditor() || (isAuthenticated() && email != '' && exists(/databases/$(database)/documents/users/$(email)) && get(/databases/$(database)/documents/users/$(email)).data.roomNumber == getStudentRoom(studentId));
     }
 
     function hasOnlyAllowedFields(allowedFields) {
@@ -126,14 +129,32 @@ service cloud.firestore {
              data.status in ['pending', 'approved'];
     }
 
+    function isValidDomain(data) {
+      return hasOnlyAllowedFields(['name']) &&
+             hasRequiredFields(['name']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100;
+    }
+
     // ===============================================================
     // Collections
     // ===============================================================
 
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (isAdmin() || (getResolvedEmail() == userId && request.resource.data.role == 'para'));
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (
+        isAdmin() || 
+        (userId == "mrenegar@gmail.com" && request.resource.data.email == "mrenegar@gmail.com" && request.resource.data.role == 'admin') ||
+        (userId == "renegml@nv.ccsd.net" && request.resource.data.email == "renegml@nv.ccsd.net" && request.resource.data.role == 'admin') ||
+        (getResolvedEmail() == userId && request.resource.data.role == 'para')
+      );
       allow update: if isAuthenticated() && isValidUser(request.resource.data) && (isAdmin() || (getResolvedEmail() == userId && request.resource.data.role == resource.data.role));
+      allow delete: if isAdmin();
+    }
+
+    match /domains/{domainId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidDomain(request.resource.data);
+      allow update: if isAdmin() && isValidDomain(request.resource.data);
       allow delete: if isAdmin();
     }
 
@@ -186,7 +207,7 @@ service cloud.firestore {
     }
 
     match /userAliases/{aliasEmail} {
-      allow read: if isAuthenticated() && request.auth.token.email == aliasEmail;
+      allow read: if true;
       allow create, update: if isAuthenticated() && request.resource.data.targetEmail == getResolvedEmail();
       allow delete: if isAuthenticated() && resource.data.targetEmail == getResolvedEmail();
     }
