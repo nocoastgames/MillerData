@@ -54,4 +54,7 @@ export interface GoalBankItem {
   domain: string;
   trackingType: TrackingType;
   defaultObjectives: Objective[];
+  status: 'pending' | 'approved';
+  submittedBy?: string;
+  submittedByName?: string;
 }

@@ -140,7 +140,7 @@ export const MassEntry = () => {
               >
                 <option value="" disabled>Select a goal...</option>
                 {goals.map(g => (
-                  <option key={g.id} value={g.id}>{g.title}</option>
+                  <option key={g.id} value={g.id}>[{g.domain}] {g.title}</option>
                 ))}
               </select>
             </div>

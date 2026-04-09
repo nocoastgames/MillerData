@@ -89,7 +89,8 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
   const filteredBank = goalBank.filter(item => {
     const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDomain = selectedDomain === 'All' || item.domain === selectedDomain;
-    return matchesSearch && matchesDomain;
+    const isApproved = item.status === 'approved';
+    return matchesSearch && matchesDomain && isApproved;
   });
 
   const handleImportGoal = (bankItem: GoalBankItem) => {
@@ -135,19 +136,27 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
 
     try {
       if (isBuildingBankItem) {
-        const bankData = {
+        const bankData: any = {
           title: newGoal.title,
           domain: newGoal.domain,
           trackingType: newGoal.trackingType,
-          defaultObjectives: newGoal.objectives
+          defaultObjectives: newGoal.objectives,
+          status: profile?.role === 'admin' ? 'approved' : 'pending',
+          submittedBy: profile?.email,
+          submittedByName: profile?.name
         };
 
         if (editingBankItemId) {
+          // Keep existing status if editing an approved item, unless admin
+          const existing = goalBank.find(b => b.id === editingBankItemId);
+          if (existing && profile?.role !== 'admin') {
+            bankData.status = existing.status;
+          }
           await updateDoc(doc(db, 'goalBank', editingBankItemId), bankData);
           toast.success('Bank goal updated');
         } else {
           await addDoc(collection(db, 'goalBank'), bankData);
-          toast.success('Goal added to bank');
+          toast.success(profile?.role === 'admin' ? 'Goal added to bank' : 'Goal submitted for approval');
         }
       } else {
         await addDoc(collection(db, 'goals'), {
@@ -232,7 +241,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
               setIsBuildingBankItem(true);
               setEditingBankItemId(null);
             }} className="rounded-full">
-              <Plus className="w-4 h-4 mr-2" /> Add to Bank
+              <Plus className="w-4 h-4 mr-2" /> {profile?.role === 'admin' ? 'Add to Bank' : 'Suggest Goal'}
             </Button>
           )}
         </div>
@@ -343,7 +352,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
               <Card key={goal.id} className="border-0 shadow-sm">
                 <CardHeader className="pb-2 flex flex-row items-start justify-between">
                   <div>
-                    <CardTitle className="text-xl">{goal.title}</CardTitle>
+                    <CardTitle className="text-xl">[{goal.domain}] {goal.title}</CardTitle>
                     <div className="flex gap-2 mt-2">
                       <span className="text-xs font-medium bg-primary/10 text-primary px-2 py-1 rounded-full">{goal.domain}</span>
                       <span className="text-xs font-medium bg-secondary/20 text-secondary-foreground px-2 py-1 rounded-full capitalize">{goal.trackingType}</span>
@@ -487,7 +496,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
                   setEditingBankItemId(null);
                 }} className="rounded-full">Cancel</Button>
                 <Button onClick={handleSaveGoal} className="rounded-full px-8">
-                  {isBuildingBankItem ? (editingBankItemId ? 'Update Bank Goal' : 'Add to Bank') : 'Save Goal'}
+                  {isBuildingBankItem ? (editingBankItemId ? 'Update Bank Goal' : (profile?.role === 'admin' ? 'Add to Bank' : 'Submit for Approval')) : 'Save Goal'}
                 </Button>
               </div>
             </CardContent>
@@ -510,7 +519,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
               />
               {filteredBank.map(item => (
                 <div key={item.id} className="p-3 bg-white rounded-xl shadow-sm border text-sm">
-                  <div className="font-medium mb-1">{item.title}</div>
+                  <div className="font-medium mb-1">[{item.domain}] {item.title}</div>
                   <div className="flex justify-between items-center mt-2">
                     <span className="text-xs text-muted-foreground">{item.domain}</span>
                     <Button variant="secondary" size="sm" className="h-7 text-xs rounded-full" onClick={() => handleImportGoal(item)}>

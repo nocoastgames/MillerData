@@ -85,9 +85,12 @@
             },
             "required": ["id", "title"]
           }
-        }
+        },
+        "status": { "type": "string", "enum": ["pending", "approved"] },
+        "submittedBy": { "type": "string" },
+        "submittedByName": { "type": "string" }
       },
-      "required": ["title", "domain", "trackingType", "defaultObjectives"]
+      "required": ["title", "domain", "trackingType", "defaultObjectives", "status"]
     }
   },
   "firestore": {

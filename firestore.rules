@@ -106,12 +106,13 @@ service cloud.firestore {
     }
 
     function isValidGoalBankItem(data) {
-      return hasOnlyAllowedFields(['title', 'domain', 'trackingType', 'defaultObjectives']) &&
-             hasRequiredFields(['title', 'domain', 'trackingType', 'defaultObjectives']) &&
+      return hasOnlyAllowedFields(['title', 'domain', 'trackingType', 'defaultObjectives', 'status', 'submittedBy', 'submittedByName']) &&
+             hasRequiredFields(['title', 'domain', 'trackingType', 'defaultObjectives', 'status']) &&
              data.title is string && data.title.size() > 0 && data.title.size() < 500 &&
              data.domain is string && data.domain.size() > 0 && data.domain.size() < 100 &&
              data.trackingType in ['percentage', 'frequency', 'duration'] &&
-             data.defaultObjectives is list && data.defaultObjectives.size() <= 50;
+             data.defaultObjectives is list && data.defaultObjectives.size() <= 50 &&
+             data.status in ['pending', 'approved'];
     }
 
     // ===============================================================
@@ -148,8 +149,10 @@ service cloud.firestore {
 
     match /goalBank/{goalBankId} {
       allow read: if isAuthenticated();
-      allow create: if (isAdmin() || isTeacher()) && isValidGoalBankItem(request.resource.data);
-      allow update: if (isAdmin() || isTeacher()) && isValidGoalBankItem(request.resource.data);
+      allow create: if (isAdmin() || isTeacher()) && isValidGoalBankItem(request.resource.data) && 
+                    (isAdmin() || request.resource.data.status == 'pending');
+      allow update: if (isAdmin() || isTeacher()) && isValidGoalBankItem(request.resource.data) && 
+                    (isAdmin() || (request.resource.data.status == resource.data.status && resource.data.status == 'pending'));
       allow delete: if isAdmin();
     }
   }

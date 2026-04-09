@@ -218,7 +218,7 @@ export const ProgressGraph = ({ isHistory = false }: { isHistory?: boolean }) =>
             >
               <option value="" disabled>Select a goal to view progress...</option>
               {goals.map(g => (
-                <option key={g.id} value={g.id}>{g.title}</option>
+                <option key={g.id} value={g.id}>[{g.domain}] {g.title}</option>
               ))}
             </select>
           </div>

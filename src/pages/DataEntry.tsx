@@ -153,7 +153,7 @@ export const DataEntry = () => {
                       : 'border-transparent bg-muted hover:bg-muted/80'
                   }`}
                 >
-                  <div className="font-semibold">{goal.title}</div>
+                  <div className="font-semibold">[{goal.domain}] {goal.title}</div>
                   <div className="text-sm text-muted-foreground capitalize">{goal.trackingType} Tracking</div>
                 </button>
               ))}
