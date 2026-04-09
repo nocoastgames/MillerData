@@ -18,7 +18,7 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-export { sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink };
+export { signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink };
 
 export enum OperationType {
   CREATE = 'create',
