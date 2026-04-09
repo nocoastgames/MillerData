@@ -26,7 +26,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAuthError(null);
       if (firebaseUser && firebaseUser.email) {
         try {
-          const email = firebaseUser.email.toLowerCase();
+          let email = firebaseUser.email.toLowerCase();
+          
+          // Check for alias
+          const aliasDocRef = doc(db, 'userAliases', email);
+          const aliasDoc = await getDoc(aliasDocRef);
+          if (aliasDoc.exists()) {
+            email = aliasDoc.data().targetEmail;
+          }
+
           const userDocRef = doc(db, 'users', email);
           const userDoc = await getDoc(userDocRef);
           

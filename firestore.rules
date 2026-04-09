@@ -11,33 +11,43 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function getResolvedEmail() {
+      let alias = get(/databases/$(database)/documents/userAliases/$(request.auth.token.email));
+      return alias != null ? alias.data.targetEmail : request.auth.token.email;
+    }
+
     function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.token.email)).data;
+      return get(/databases/$(database)/documents/users/$(getResolvedEmail())).data;
     }
 
     function isAdmin() {
+      let email = getResolvedEmail();
       return isAuthenticated() && (
-        (exists(/databases/$(database)/documents/users/$(request.auth.token.email)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role == 'admin') ||
-        request.auth.token.email == "mrenegar@gmail.com" ||
-        request.auth.token.email == "renegml@nv.ccsd.net"
+        (exists(/databases/$(database)/documents/users/$(email)) && 
+         get(/databases/$(database)/documents/users/$(email)).data.role == 'admin') ||
+        email == "mrenegar@gmail.com" ||
+        email == "renegml@nv.ccsd.net"
       );
     }
 
     function isTeacher() {
-      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.token.email)) && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role == 'teacher';
+      let email = getResolvedEmail();
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(email)) && get(/databases/$(database)/documents/users/$(email)).data.role == 'teacher';
     }
 
     function isPara() {
-      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.token.email)) && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role == 'para';
+      let email = getResolvedEmail();
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(email)) && get(/databases/$(database)/documents/users/$(email)).data.role == 'para';
     }
 
     function isEditor() {
-      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.token.email)) && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role == 'editor';
+      let email = getResolvedEmail();
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(email)) && get(/databases/$(database)/documents/users/$(email)).data.role == 'editor';
     }
 
     function hasRoomAccess(roomNumber) {
-      return isAdmin() || isEditor() || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.token.email)) && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.roomNumber == roomNumber);
+      let email = getResolvedEmail();
+      return isAdmin() || isEditor() || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(email)) && get(/databases/$(database)/documents/users/$(email)).data.roomNumber == roomNumber);
     }
 
     function getStudentRoom(studentId) {
@@ -45,7 +55,8 @@ service cloud.firestore {
     }
 
     function hasStudentAccess(studentId) {
-      return isAdmin() || isEditor() || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.token.email)) && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.roomNumber == getStudentRoom(studentId));
+      let email = getResolvedEmail();
+      return isAdmin() || isEditor() || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(email)) && get(/databases/$(database)/documents/users/$(email)).data.roomNumber == getStudentRoom(studentId));
     }
 
     function hasOnlyAllowedFields(allowedFields) {
@@ -121,8 +132,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (isAdmin() || (request.auth.token.email == userId && request.resource.data.role == 'para'));
-      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (isAdmin() || (request.auth.token.email == userId && request.resource.data.role == resource.data.role));
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (isAdmin() || (getResolvedEmail() == userId && request.resource.data.role == 'para'));
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (isAdmin() || (getResolvedEmail() == userId && request.resource.data.role == resource.data.role));
       allow delete: if isAdmin();
     }
 
@@ -154,6 +165,30 @@ service cloud.firestore {
       allow update: if (isAdmin() || isTeacher()) && isValidGoalBankItem(request.resource.data) && 
                     (isAdmin() || (request.resource.data.status == resource.data.status && resource.data.status == 'pending'));
       allow delete: if isAdmin();
+    }
+
+    match /remoteLoginSessions/{sessionId} {
+      allow read: if true;
+    }
+
+    match /linkSessions/{sessionId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.targetEmail == getResolvedEmail();
+      allow update: if isAuthenticated() && (
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['personalEmail', 'status']) &&
+         request.resource.data.personalEmail == request.auth.token.email &&
+         request.resource.data.status == 'scanned') 
+        ||
+        (resource.data.targetEmail == getResolvedEmail() &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+         request.resource.data.status == 'linked')
+      );
+    }
+
+    match /userAliases/{aliasEmail} {
+      allow read: if isAuthenticated() && request.auth.token.email == aliasEmail;
+      allow create, update: if isAuthenticated() && request.resource.data.targetEmail == getResolvedEmail();
+      allow delete: if isAuthenticated() && resource.data.targetEmail == getResolvedEmail();
     }
   }
 }

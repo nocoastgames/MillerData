@@ -10,6 +10,7 @@ import { MassEntry } from './pages/MassEntry';
 import { GoalManagement } from './pages/GoalManagement';
 import { ProgressGraph } from './pages/ProgressGraph';
 import { AdminPanel } from './pages/AdminPanel';
+import { LinkDevice } from './pages/LinkDevice';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -38,6 +39,7 @@ export default function App() {
         <HashRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/link-device" element={<LinkDevice />} />
             
             <Route path="/" element={
               <ProtectedRoute>

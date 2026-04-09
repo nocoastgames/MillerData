@@ -9,16 +9,19 @@ import {
   Library, 
   LogOut, 
   Menu,
-  X
+  X,
+  Smartphone
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { APP_VERSION } from '../version';
+import { LinkDeviceModal } from './LinkDeviceModal';
 
 export const Layout = () => {
   const { profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isLinkModalOpen, setIsLinkModalOpen] = React.useState(false);
 
   const handleSignOut = async () => {
     await signOut(auth);
@@ -87,6 +90,14 @@ export const Layout = () => {
           </div>
           <Button 
             variant="ghost" 
+            className="w-full justify-start text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground rounded-2xl mb-2"
+            onClick={() => setIsLinkModalOpen(true)}
+          >
+            <Smartphone className="w-5 h-5 mr-3" />
+            Link Mobile Device
+          </Button>
+          <Button 
+            variant="ghost" 
             className="w-full justify-start text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground rounded-2xl"
             onClick={handleSignOut}
           >
@@ -113,6 +124,11 @@ export const Layout = () => {
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
+
+      <LinkDeviceModal 
+        isOpen={isLinkModalOpen} 
+        onClose={() => setIsLinkModalOpen(false)} 
+      />
     </div>
   );
 };

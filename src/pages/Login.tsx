@@ -5,10 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { GraduationCap, Mail, CheckCircle2, QrCode, Smartphone } from 'lucide-react';
+import { GraduationCap, Mail, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { APP_VERSION } from '../version';
-import { QRCodeSVG } from 'qrcode.react';
 
 export const Login = () => {
   const navigate = useNavigate();
@@ -17,8 +16,6 @@ export const Login = () => {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [linkSent, setLinkSent] = useState(false);
-  const [qrLink, setQrLink] = useState('');
-  const [showQR, setShowQR] = useState(false);
 
   useEffect(() => {
     // Check if the page was loaded from a sign-in link
@@ -85,34 +82,6 @@ export const Login = () => {
     }
   };
 
-  const handleGenerateQR = async () => {
-    if (!email) {
-      setError('Please enter your email first');
-      return;
-    }
-    setError('');
-    setLoading(true);
-    try {
-      const response = await fetch('/api/auth/generate-mobile-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email,
-          redirectUrl: window.location.origin + window.location.pathname
-        }),
-      });
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
-      setQrLink(data.link);
-      setShowQR(true);
-    } catch (err: any) {
-      console.error('Error generating QR:', err);
-      setError(err.message || 'Failed to generate QR code');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleGoogleSignIn = async () => {
     setError('');
     setLoading(true);
@@ -152,43 +121,6 @@ export const Login = () => {
             <Button 
               variant="outline" 
               onClick={() => setLinkSent(false)}
-              className="rounded-full"
-            >
-              Back to Sign In
-            </Button>
-            <div className="mt-6 text-[10px] text-muted-foreground/40 font-mono">
-              v{APP_VERSION}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (showQR && qrLink) {
-    return (
-      <div className="min-h-screen bg-muted flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-xl border-0">
-          <CardHeader className="text-center pb-6 pt-10">
-            <div className="mx-auto w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
-              <Smartphone className="w-10 h-10 text-primary" />
-            </div>
-            <CardTitle className="text-2xl font-bold text-primary mb-2">Mobile Sign-In</CardTitle>
-            <CardDescription className="text-base">
-              Scan this code with your mobile device to sign in instantly.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pb-10 px-8 flex flex-col items-center">
-            <div className="bg-white p-6 rounded-2xl shadow-inner mb-8">
-              <QRCodeSVG value={qrLink} size={200} level="H" />
-            </div>
-            <p className="text-sm text-center text-muted-foreground mb-6">
-              This link is secure and tied to <span className="font-semibold text-foreground">{email}</span>.
-              It will expire in a few minutes.
-            </p>
-            <Button 
-              variant="outline" 
-              onClick={() => setShowQR(false)}
               className="rounded-full"
             >
               Back to Sign In
@@ -243,16 +175,6 @@ export const Login = () => {
               disabled={loading}
             >
               {loading ? 'Sending link...' : 'Send Sign-In Link'}
-            </Button>
-            <Button 
-              type="button"
-              variant="ghost"
-              onClick={handleGenerateQR}
-              className="w-full h-10 text-sm rounded-full text-muted-foreground hover:text-primary transition-all"
-              disabled={loading}
-            >
-              <QrCode className="w-4 h-4 mr-2" />
-              Sign in with QR Code (Mobile)
             </Button>
           </form>
 

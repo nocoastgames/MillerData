@@ -26,23 +26,69 @@ async function startServer() {
   app.use(express.json());
 
   // API Routes
-  app.post('/api/auth/generate-mobile-link', async (req, res) => {
-    const { email, redirectUrl } = req.body;
-    
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
+  app.post('/api/auth/get-custom-token', async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
     }
+    const idToken = authHeader.split('Bearer ')[1];
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      const customToken = await admin.auth().createCustomToken(decodedToken.uid);
+      res.json({ customToken });
+    } catch (error: any) {
+      console.error('Error creating custom token:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/auth/generate-remote-login', async (req, res) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email required' });
+    
+    try {
+      // Create a remote login session in Firestore
+      const db = admin.firestore();
+      const sessionRef = await db.collection('remoteLoginSessions').add({
+        email: email.toLowerCase().trim(),
+        status: 'pending',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 mins
+      });
+      
+      res.json({ sessionId: sessionRef.id });
+    } catch (error: any) {
+      console.error('Error generating remote login:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/auth/authorize-remote-login', async (req, res) => {
+    const { sessionId, idToken } = req.body;
+    if (!sessionId || !idToken) return res.status(400).json({ error: 'Missing params' });
 
     try {
-      const actionCodeSettings = {
-        url: redirectUrl || 'https://' + req.get('host') + '/MillerData/login',
-        handleCodeInApp: true,
-      };
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      const db = admin.firestore();
+      const sessionDoc = await db.collection('remoteLoginSessions').doc(sessionId).get();
+      
+      if (!sessionDoc.exists) return res.status(404).json({ error: 'Session not found' });
+      const sessionData = sessionDoc.data();
+      
+      if (sessionData?.email !== decodedToken.email) {
+        return res.status(403).json({ error: 'Email mismatch' });
+      }
 
-      const link = await admin.auth().generateSignInWithEmailLink(email, actionCodeSettings);
-      res.json({ link });
+      const customToken = await admin.auth().createCustomToken(decodedToken.uid);
+      await db.collection('remoteLoginSessions').doc(sessionId).update({
+        status: 'authorized',
+        customToken,
+        authorizedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      res.json({ success: true });
     } catch (error: any) {
-      console.error('Error generating sign-in link:', error);
+      console.error('Error authorizing remote login:', error);
       res.status(500).json({ error: error.message });
     }
   });
