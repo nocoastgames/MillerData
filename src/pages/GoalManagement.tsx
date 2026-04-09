@@ -234,7 +234,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
             <h1 className="text-3xl font-bold text-foreground">Goal Bank</h1>
             <p className="text-muted-foreground">Browse and manage pre-written IEP goals</p>
           </div>
-          {(profile?.role === 'admin' || profile?.role === 'teacher') && (
+          {(profile?.role === 'admin' || profile?.role === 'teacher' || profile?.role === 'editor') && (
             <Button onClick={() => {
               setNewGoal({ title: '', domain: 'Reading', trackingType: 'percentage', objectives: [] });
               setIsBuilding(true);
@@ -278,7 +278,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
                         <span className="text-xs font-medium bg-primary/10 text-primary px-2 py-1 rounded-full whitespace-nowrap">
                           {item.domain}
                         </span>
-                        {(profile?.role === 'admin' || profile?.role === 'teacher') && (
+                        {(profile?.role === 'admin' || profile?.role === 'teacher' || profile?.role === 'editor') && (
                           <div className="flex gap-1">
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => handleEditBankItem(item)}>
                               <Edit2 className="w-4 h-4" />

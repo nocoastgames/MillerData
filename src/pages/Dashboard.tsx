@@ -18,7 +18,7 @@ export const Dashboard = () => {
     if (!profile) return;
 
     let q;
-    if (profile.role === 'admin') {
+    if (profile.role === 'admin' || profile.role === 'editor') {
       q = query(collection(db, 'students'), where('status', '==', 'active'));
     } else {
       q = query(
@@ -65,7 +65,7 @@ export const Dashboard = () => {
         <div>
           <h1 className="text-3xl font-bold text-foreground tracking-tight">Student Roster</h1>
           <p className="text-muted-foreground mt-1">
-            {profile?.role === 'admin' ? 'All active students across all rooms' : `Room ${profile?.roomNumber} active students`}
+            {profile?.role === 'admin' || profile?.role === 'editor' ? 'All active students across all rooms' : `Room ${profile?.roomNumber} active students`}
           </p>
         </div>
       </div>
@@ -76,7 +76,7 @@ export const Dashboard = () => {
             <Users className="w-12 h-12 text-muted-foreground mb-4" />
             <h3 className="text-xl font-semibold mb-2">No students found</h3>
             <p className="text-muted-foreground max-w-md">
-              {profile?.role === 'admin' 
+              {profile?.role === 'admin' || profile?.role === 'editor'
                 ? "There are no active students in the system. Go to the Admin Panel to add students."
                 : `There are no active students assigned to Room ${profile?.roomNumber}. Contact an administrator if this is incorrect.`}
             </p>
@@ -85,7 +85,7 @@ export const Dashboard = () => {
       ) : (
         Object.entries(groupedStudents).map(([room, roomStudents]: [string, Student[]]) => (
           <div key={room} className="space-y-4">
-            {profile?.role === 'admin' && (
+            {(profile?.role === 'admin' || profile?.role === 'editor') && (
               <h2 className="text-xl font-semibold flex items-center gap-2 text-primary">
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm">
                   {room}

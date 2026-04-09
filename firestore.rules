@@ -37,7 +37,7 @@ service cloud.firestore {
     }
 
     function hasRoomAccess(roomNumber) {
-      return isAdmin() || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.token.email)) && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.roomNumber == roomNumber);
+      return isAdmin() || isEditor() || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.token.email)) && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.roomNumber == roomNumber);
     }
 
     function getStudentRoom(studentId) {
@@ -45,7 +45,7 @@ service cloud.firestore {
     }
 
     function hasStudentAccess(studentId) {
-      return isAdmin() || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.token.email)) && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.roomNumber == getStudentRoom(studentId));
+      return isAdmin() || isEditor() || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.token.email)) && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.roomNumber == getStudentRoom(studentId));
     }
 
     function hasOnlyAllowedFields(allowedFields) {
@@ -62,11 +62,11 @@ service cloud.firestore {
 
     function isValidUser(data) {
       return hasOnlyAllowedFields(['name', 'email', 'role', 'roomNumber', 'status']) &&
-             hasRequiredFields(['name', 'email', 'role', 'roomNumber', 'status']) &&
+             hasRequiredFields(['name', 'email', 'role', 'status']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
              data.role in ['admin', 'teacher', 'para', 'editor'] &&
-             data.roomNumber is string && data.roomNumber.size() < 50 &&
+             (!('roomNumber' in data) || (data.roomNumber is string && data.roomNumber.size() < 50)) &&
              data.status in ['active', 'inactive'];
     }
 

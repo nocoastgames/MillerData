@@ -5,7 +5,7 @@ export interface UserProfile {
   name: string;
   email: string;
   role: Role;
-  roomNumber: string;
+  roomNumber?: string;
   status: 'active' | 'inactive';
 }
 

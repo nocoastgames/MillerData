@@ -118,7 +118,7 @@ export const AdminPanel = () => {
         name: editUser.name,
         email: editUser.email?.toLowerCase().trim(),
         role: editUser.role,
-        roomNumber: editUser.roomNumber,
+        roomNumber: editUser.roomNumber || '',
         status: editUser.status
       };
       await updateDoc(doc(db, 'users', id), dataToUpdate);
@@ -183,7 +183,8 @@ export const AdminPanel = () => {
   };
 
   const handleAddUser = async () => {
-    if (!newUser.name || !newUser.email || !newUser.role || !newUser.roomNumber) {
+    const isRoomRequired = newUser.role === 'teacher' || newUser.role === 'para';
+    if (!newUser.name || !newUser.email || !newUser.role || (isRoomRequired && !newUser.roomNumber)) {
       toast.error('Please fill all required fields');
       return;
     }
@@ -196,7 +197,7 @@ export const AdminPanel = () => {
         name: newUser.name,
         email: userEmail,
         role: newUser.role,
-        roomNumber: newUser.roomNumber,
+        roomNumber: newUser.roomNumber || '',
         status: newUser.status || 'active'
       };
       
@@ -436,7 +437,7 @@ export const AdminPanel = () => {
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Room Number</Label>
+                    <Label>Room Number {(newUser.role === 'admin' || newUser.role === 'editor') && '(Optional)'}</Label>
                     <Input value={newUser.roomNumber} onChange={e => setNewUser({...newUser, roomNumber: e.target.value})} />
                   </div>
                   <div className="space-y-2">
@@ -510,9 +511,14 @@ export const AdminPanel = () => {
                           </td>
                           <td className="px-6 py-4">
                             {isEditing ? (
-                              <Input value={editUser.roomNumber} onChange={e => setEditUser({...editUser, roomNumber: e.target.value})} className="w-20" />
+                              <Input 
+                                value={editUser.roomNumber} 
+                                onChange={e => setEditUser({...editUser, roomNumber: e.target.value})} 
+                                className="w-20" 
+                                placeholder={(editUser.role === 'admin' || editUser.role === 'editor') ? 'Optional' : ''}
+                              />
                             ) : (
-                              <span className="font-medium">{user.roomNumber}</span>
+                              <span className="font-medium">{user.roomNumber || 'N/A'}</span>
                             )}
                           </td>
                           <td className="px-6 py-4">
