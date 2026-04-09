@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { GraduationCap, Mail, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { APP_VERSION } from '../version';
 
 export const Login = () => {
   const navigate = useNavigate();
@@ -106,6 +107,9 @@ export const Login = () => {
             >
               Back to Sign In
             </Button>
+            <div className="mt-6 text-[10px] text-muted-foreground/40 font-mono">
+              v{APP_VERSION}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -156,10 +160,13 @@ export const Login = () => {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="px-8 pb-8 justify-center border-t pt-6">
+        <CardFooter className="px-8 pb-8 flex-col gap-4 border-t pt-6">
           <p className="text-xs text-center text-muted-foreground">
             A secure link will be sent to your inbox. No password required.
           </p>
+          <div className="text-[10px] text-muted-foreground/40 font-mono">
+            v{APP_VERSION}
+          </div>
         </CardFooter>
       </Card>
     </div>

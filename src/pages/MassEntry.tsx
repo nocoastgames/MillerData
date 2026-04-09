@@ -157,7 +157,7 @@ export const MassEntry = () => {
               </div>
               
               <div className="space-y-3">
-                {selectedGoal.objectives.map((obj, index) => (
+                {(selectedGoal.objectives || []).map((obj, index) => (
                   <div key={obj.id} className="flex items-center gap-4 p-3 rounded-xl hover:bg-muted/50 transition-colors">
                     <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0">
                       {index + 1}

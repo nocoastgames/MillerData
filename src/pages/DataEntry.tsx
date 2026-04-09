@@ -169,7 +169,7 @@ export const DataEntry = () => {
             <div className="space-y-2 animate-in fade-in slide-in-from-top-4">
               <Label className="text-base">Select Sub-Skill (Objective)</Label>
               <div className="grid grid-cols-1 gap-3">
-                {selectedGoal.objectives.map(obj => (
+                {(selectedGoal.objectives || []).map(obj => (
                   <button
                     key={obj.id}
                     onClick={() => setSelectedObj(obj)}

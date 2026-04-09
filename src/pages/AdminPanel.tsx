@@ -500,7 +500,7 @@ export const AdminPanel = () => {
                       }, {} as Record<string, Student[]>)
                     ).sort(([roomA], [roomB]) => roomA.localeCompare(roomB)).map(([room, roomStudents]) => (
                       <React.Fragment key={room}>
-                        {roomStudents.map(student => {
+                        {(roomStudents as Student[]).map(student => {
                           const studentGoals = allGoals.filter(g => g.studentId === student.id);
                           if (studentGoals.length === 0) {
                             return (

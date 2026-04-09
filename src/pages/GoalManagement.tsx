@@ -162,7 +162,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
   const handleIEPReview = async () => {
     if (!confirm('Are you sure you want to archive all active goals? This is typically done during an IEP review.')) return;
     try {
-      const activeGoals = goals.filter(g => g.status === 'active');
+      const activeGoals = studentGoals.filter(g => g.status === 'active');
       const promises = activeGoals.map(g => updateDoc(doc(db, 'goals', g.id), { status: 'archived' }));
       await Promise.all(promises);
       toast.success('All active goals have been archived.');
@@ -218,7 +218,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
                     <div className="space-y-1">
                       <p className="text-xs font-semibold text-foreground uppercase tracking-wider">Sub-skills:</p>
                       <ul className="list-disc pl-4 text-sm text-muted-foreground">
-                        {item.defaultObjectives.map(obj => (
+                        {(item.defaultObjectives || []).map(obj => (
                           <li key={obj.id}>{obj.title}</li>
                         ))}
                       </ul>
@@ -286,7 +286,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4">
-                    {goal.objectives.map((obj, i) => (
+                    {(goal.objectives || []).map((obj, i) => (
                       <div key={obj.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl">
                         <div className="w-6 h-6 rounded-full bg-background text-muted-foreground flex items-center justify-center text-xs font-bold shrink-0">
                           {i + 1}

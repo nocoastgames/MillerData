@@ -114,7 +114,7 @@ export const ProgressGraph = ({ isHistory = false }: { isHistory?: boolean }) =>
       let totalSum = 0;
       let totalCount = 0;
 
-      selectedGoal.objectives.forEach(obj => {
+      (selectedGoal.objectives || []).forEach(obj => {
         const values = groupedByDate[date][obj.id];
         if (values && values.length > 0) {
           const avg = values.reduce((a, b) => a + b, 0) / values.length;
@@ -137,7 +137,7 @@ export const ProgressGraph = ({ isHistory = false }: { isHistory?: boolean }) =>
     let overallCount = 0;
     const objAverages: Record<string, number> = {};
 
-    selectedGoal.objectives.forEach(obj => {
+    (selectedGoal.objectives || []).forEach(obj => {
       let objSum = 0;
       let objCount = 0;
       last5Dates.forEach(date => {
@@ -274,7 +274,7 @@ export const ProgressGraph = ({ isHistory = false }: { isHistory?: boolean }) =>
                         />
 
                         {/* Individual Objectives */}
-                        {selectedGoal.objectives.map((obj, index) => (
+                        {(selectedGoal.objectives || []).map((obj, index) => (
                           <Line 
                             key={obj.id}
                             type="monotone" 
@@ -310,7 +310,7 @@ export const ProgressGraph = ({ isHistory = false }: { isHistory?: boolean }) =>
                           </div>
                         </div>
                         <div className="space-y-3">
-                          {selectedGoal.objectives.map((obj, index) => {
+                          {(selectedGoal.objectives || []).map((obj, index) => {
                             const avg = interpretation.objAverages[obj.id];
                             if (avg === undefined) return null;
                             return (
@@ -353,7 +353,7 @@ export const ProgressGraph = ({ isHistory = false }: { isHistory?: boolean }) =>
                     </thead>
                     <tbody>
                       {[...dataPoints].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map(dp => {
-                        const obj = selectedGoal.objectives.find(o => o.id === dp.objId);
+                        const obj = (selectedGoal.objectives || []).find(o => o.id === dp.objId);
                         const isEditing = editingId === dp.id;
                         return (
                           <tr key={dp.id} className="border-b last:border-0 hover:bg-muted/20">

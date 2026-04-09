@@ -12,6 +12,7 @@ import {
   X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { APP_VERSION } from '../version';
 
 export const Layout = () => {
   const { profile } = useAuth();
@@ -92,6 +93,9 @@ export const Layout = () => {
             <LogOut className="w-5 h-5 mr-3" />
             Sign Out
           </Button>
+          <div className="mt-4 px-4 text-[10px] text-primary-foreground/40 font-mono text-center">
+            v{APP_VERSION}
+          </div>
         </div>
       </div>
 
