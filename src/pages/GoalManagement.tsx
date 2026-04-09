@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { collection, query, where, onSnapshot, addDoc, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Goal, Student, GoalBankItem, Objective, TrackingType } from '../types';
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Plus, Search, Archive, Target, Library, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Archive, Target, Library, Trash2, Edit2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const DOMAINS = ['Reading', 'Writing', 'Math', 'Speech', 'Communication', 'Personal Care', 'Motor', 'Social', 'Behavioral'];
@@ -27,6 +27,8 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
 
   // Builder State
   const [isBuilding, setIsBuilding] = useState(false);
+  const [isBuildingBankItem, setIsBuildingBankItem] = useState(false);
+  const [editingBankItemId, setEditingBankItemId] = useState<string | null>(null);
   const [newGoal, setNewGoal] = useState<Partial<Goal>>({
     title: '',
     domain: 'Reading',
@@ -99,30 +101,73 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
       objectives: [...bankItem.defaultObjectives]
     });
     setIsBuilding(true);
+    setIsBuildingBankItem(false);
+  };
+
+  const handleEditBankItem = (bankItem: GoalBankItem) => {
+    setNewGoal({
+      title: bankItem.title,
+      domain: bankItem.domain,
+      trackingType: bankItem.trackingType,
+      objectives: [...bankItem.defaultObjectives]
+    });
+    setEditingBankItemId(bankItem.id);
+    setIsBuilding(true);
+    setIsBuildingBankItem(true);
+  };
+
+  const handleDeleteBankItem = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this goal from the bank?')) return;
+    try {
+      await deleteDoc(doc(db, 'goalBank', id));
+      toast.success('Goal removed from bank');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `goalBank/${id}`);
+      toast.error('Failed to delete bank item');
+    }
   };
 
   const handleSaveGoal = async () => {
-    if (!studentId || !newGoal.title || !newGoal.objectives?.length) {
+    if ((!isBuildingBankItem && !studentId) || !newGoal.title || !newGoal.objectives?.length) {
       toast.error('Please complete all required fields and add at least one objective.');
       return;
     }
 
     try {
-      await addDoc(collection(db, 'goals'), {
-        studentId,
-        title: newGoal.title,
-        domain: newGoal.domain,
-        trackingType: newGoal.trackingType,
-        masteryCriteria: newGoal.masteryCriteria,
-        objectives: newGoal.objectives,
-        status: 'active'
-      });
-      toast.success('Goal added successfully');
+      if (isBuildingBankItem) {
+        const bankData = {
+          title: newGoal.title,
+          domain: newGoal.domain,
+          trackingType: newGoal.trackingType,
+          defaultObjectives: newGoal.objectives
+        };
+
+        if (editingBankItemId) {
+          await updateDoc(doc(db, 'goalBank', editingBankItemId), bankData);
+          toast.success('Bank goal updated');
+        } else {
+          await addDoc(collection(db, 'goalBank'), bankData);
+          toast.success('Goal added to bank');
+        }
+      } else {
+        await addDoc(collection(db, 'goals'), {
+          studentId,
+          title: newGoal.title,
+          domain: newGoal.domain,
+          trackingType: newGoal.trackingType,
+          masteryCriteria: newGoal.masteryCriteria,
+          objectives: newGoal.objectives,
+          status: 'active'
+        });
+        toast.success('Goal added successfully');
+      }
       setIsBuilding(false);
+      setIsBuildingBankItem(false);
+      setEditingBankItemId(null);
       setNewGoal({ title: '', domain: 'Reading', trackingType: 'percentage', masteryCriteria: 80, objectives: [] });
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'goals');
-      toast.error('Failed to add goal');
+      handleFirestoreError(error, isBuildingBankItem ? (editingBankItemId ? OperationType.UPDATE : OperationType.CREATE) : OperationType.CREATE, isBuildingBankItem ? 'goalBank' : 'goals');
+      toast.error('Failed to save goal');
     }
   };
 
@@ -172,12 +217,24 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
     }
   };
 
-  if (isBankView) {
+  if (isBankView && !isBuilding) {
     return (
       <div className="max-w-5xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Goal Bank</h1>
-          <p className="text-muted-foreground">Browse and manage pre-written IEP goals</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Goal Bank</h1>
+            <p className="text-muted-foreground">Browse and manage pre-written IEP goals</p>
+          </div>
+          {(profile?.role === 'admin' || profile?.role === 'teacher') && (
+            <Button onClick={() => {
+              setNewGoal({ title: '', domain: 'Reading', trackingType: 'percentage', objectives: [] });
+              setIsBuilding(true);
+              setIsBuildingBankItem(true);
+              setEditingBankItemId(null);
+            }} className="rounded-full">
+              <Plus className="w-4 h-4 mr-2" /> Add to Bank
+            </Button>
+          )}
         </div>
 
         <Card className="border-0 shadow-md">
@@ -208,9 +265,21 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
                   <CardHeader className="pb-2">
                     <div className="flex justify-between items-start">
                       <CardTitle className="text-lg leading-tight">{item.title}</CardTitle>
-                      <span className="text-xs font-medium bg-primary/10 text-primary px-2 py-1 rounded-full whitespace-nowrap ml-2">
-                        {item.domain}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium bg-primary/10 text-primary px-2 py-1 rounded-full whitespace-nowrap">
+                          {item.domain}
+                        </span>
+                        {(profile?.role === 'admin' || profile?.role === 'teacher') && (
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => handleEditBankItem(item)}>
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteBankItem(item.id)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -330,7 +399,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
           {/* Goal Builder Form */}
           <Card className="lg:col-span-2 border-0 shadow-md order-2 lg:order-1">
             <CardHeader>
-              <CardTitle>Goal Builder</CardTitle>
+              <CardTitle>{isBuildingBankItem ? (editingBankItemId ? 'Edit Bank Goal' : 'Add to Goal Bank') : 'Goal Builder'}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
@@ -368,7 +437,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
                 </div>
               </div>
 
-              {newGoal.trackingType === 'percentage' && (
+              {!isBuildingBankItem && newGoal.trackingType === 'percentage' && (
                 <div className="space-y-2">
                   <Label>Mastery Criteria (%)</Label>
                   <Input 
@@ -412,8 +481,14 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
               </div>
 
               <div className="pt-6 flex justify-end gap-3">
-                <Button variant="ghost" onClick={() => setIsBuilding(false)} className="rounded-full">Cancel</Button>
-                <Button onClick={handleSaveGoal} className="rounded-full px-8">Save Goal</Button>
+                <Button variant="ghost" onClick={() => {
+                  setIsBuilding(false);
+                  setIsBuildingBankItem(false);
+                  setEditingBankItemId(null);
+                }} className="rounded-full">Cancel</Button>
+                <Button onClick={handleSaveGoal} className="rounded-full px-8">
+                  {isBuildingBankItem ? (editingBankItemId ? 'Update Bank Goal' : 'Add to Bank') : 'Save Goal'}
+                </Button>
               </div>
             </CardContent>
           </Card>
