@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, LineChart as ChartIcon, Trash2, Edit2, Save, X } from 'lucide-react';
+import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { format, parseISO, compareAsc } from 'date-fns';
 import { toast } from 'sonner';
 import {
@@ -26,6 +27,7 @@ const COLORS = ['#3b82f6', '#facc15', '#10b981', '#8b5cf6', '#f97316', '#ec4899'
 export const ProgressGraph = ({ isHistory = false }: { isHistory?: boolean }) => {
   const { studentId } = useParams();
   const navigate = useNavigate();
+  const [confirmConfig, setConfirmConfig] = useState<{isOpen: boolean; title: string; message: string; onConfirm: () => void} | null>(null);
   
   const [student, setStudent] = useState<Student | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -167,14 +169,21 @@ export const ProgressGraph = ({ isHistory = false }: { isHistory?: boolean }) =>
   const [editValue, setEditValue] = useState<string>('');
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this data point?')) return;
-    try {
-      await deleteDoc(doc(db, 'dataPoints', id));
-      toast.success('Data point deleted');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `dataPoints/${id}`);
-      toast.error('Failed to delete data point');
-    }
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Delete Data Point',
+      message: 'Are you sure you want to delete this data point?',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'dataPoints', id));
+          toast.success('Data point deleted');
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, `dataPoints/${id}`);
+          toast.error('Failed to delete data point');
+        }
+        setConfirmConfig(null);
+      }
+    });
   };
 
   const handleSaveEdit = async (id: string) => {
@@ -195,6 +204,15 @@ export const ProgressGraph = ({ isHistory = false }: { isHistory?: boolean }) =>
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      {confirmConfig && (
+        <ConfirmModal 
+          isOpen={confirmConfig.isOpen} 
+          title={confirmConfig.title} 
+          message={confirmConfig.message} 
+          onConfirm={confirmConfig.onConfirm} 
+          onCancel={() => setConfirmConfig(null)} 
+        />
+      )}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
           <ArrowLeft className="w-6 h-6" />

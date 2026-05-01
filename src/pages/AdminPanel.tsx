@@ -8,12 +8,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Edit2, Save, X, Trash2, ShieldAlert, Library, ChevronRight, ChevronDown } from 'lucide-react';
+import { ConfirmModal } from '@/components/ui/confirm-modal';
+import { Plus, Edit2, Save, X, Trash2, ShieldAlert, Library, ChevronRight, ChevronDown, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
 export const AdminPanel = () => {
   const navigate = useNavigate();
+  const [confirmConfig, setConfirmConfig] = useState<{isOpen: boolean; title: string; message: string; onConfirm: () => void} | null>(null);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   
@@ -149,14 +151,21 @@ export const AdminPanel = () => {
   };
 
   const handleDeleteUser = async (id: string) => {
-    if (!confirm('Are you sure you want to permanently delete this user?')) return;
-    try {
-      await deleteDoc(doc(db, 'users', id));
-      toast.success('User deleted');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `users/${id}`);
-      toast.error('Failed to delete user');
-    }
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Delete User',
+      message: 'Are you sure you want to permanently delete this user?',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'users', id));
+          toast.success('User deleted');
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, `users/${id}`);
+          toast.error('Failed to delete user');
+        }
+        setConfirmConfig(null);
+      }
+    });
   };
 
   const handleAddStudent = async () => {
@@ -212,14 +221,21 @@ export const AdminPanel = () => {
   };
 
   const handleDeleteStudent = async (id: string) => {
-    if (!confirm('Are you sure you want to permanently delete this student? This action cannot be undone.')) return;
-    try {
-      await deleteDoc(doc(db, 'students', id));
-      toast.success('Student deleted');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `students/${id}`);
-      toast.error('Failed to delete student');
-    }
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Delete Student',
+      message: 'Are you sure you want to permanently delete this student? This action cannot be undone.',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'students', id));
+          toast.success('Student deleted');
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, `students/${id}`);
+          toast.error('Failed to delete student');
+        }
+        setConfirmConfig(null);
+      }
+    });
   };
 
   const handleApproveBankGoal = async (id: string) => {
@@ -233,18 +249,34 @@ export const AdminPanel = () => {
   };
 
   const handleDeleteBankGoal = async (id: string) => {
-    if (!confirm('Are you sure you want to permanently delete this goal from the bank?')) return;
-    try {
-      await deleteDoc(doc(db, 'goalBank', id));
-      toast.success('Goal deleted from bank');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `goalBank/${id}`);
-      toast.error('Failed to delete goal');
-    }
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Delete Goal from Bank',
+      message: 'Are you sure you want to permanently delete this goal from the bank?',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'goalBank', id));
+          toast.success('Goal deleted from bank');
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, `goalBank/${id}`);
+          toast.error('Failed to delete goal');
+        }
+        setConfirmConfig(null);
+      }
+    });
   };
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      {confirmConfig && (
+        <ConfirmModal 
+          isOpen={confirmConfig.isOpen} 
+          title={confirmConfig.title} 
+          message={confirmConfig.message} 
+          onConfirm={confirmConfig.onConfirm} 
+          onCancel={() => setConfirmConfig(null)} 
+        />
+      )}
       <div>
         <h1 className="text-3xl font-bold text-foreground">Admin Panel</h1>
         <p className="text-muted-foreground">Manage users, roles, and student assignments</p>
@@ -326,7 +358,7 @@ export const AdminPanel = () => {
                     {students.map((student) => {
                       const isEditing = editingStudentId === student.id;
                       return (
-                        <tr key={student.id} className="border-b last:border-0 hover:bg-muted/20">
+                        <tr key={student.id} className={`border-b last:border-0 hover:bg-muted/20 ${student.status === 'archived' ? 'opacity-60 bg-muted/30' : ''}`}>
                           <td className="px-6 py-4">
                             {isEditing ? (
                               <div className="flex gap-2">
@@ -375,10 +407,22 @@ export const AdminPanel = () => {
                               </div>
                             ) : (
                               <div className="flex justify-end gap-2">
-                                <Button variant="ghost" size="icon" onClick={() => { setEditingStudentId(student.id); setEditStudent(student); }}>
+                                {student.status !== 'archived' && (
+                                  <Button variant="ghost" size="icon" onClick={async () => {
+                                    try {
+                                      await updateDoc(doc(db, 'students', student.id), { status: 'archived' });
+                                      toast.success('Student archived');
+                                    } catch (e) {
+                                      toast.error('Failed to archive student');
+                                    }
+                                  }} title="Archive Student">
+                                    <Archive className="w-4 h-4 text-orange-500" />
+                                  </Button>
+                                )}
+                                <Button variant="ghost" size="icon" onClick={() => { setEditingStudentId(student.id); setEditStudent(student); }} title="Edit Student">
                                   <Edit2 className="w-4 h-4 text-muted-foreground" />
                                 </Button>
-                                <Button variant="ghost" size="icon" onClick={() => handleDeleteStudent(student.id)}>
+                                <Button variant="ghost" size="icon" onClick={() => handleDeleteStudent(student.id)} title="Delete Student">
                                   <Trash2 className="w-4 h-4 text-destructive" />
                                 </Button>
                               </div>

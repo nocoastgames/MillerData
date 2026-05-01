@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Check, X, Plus, Play, Square, ArrowLeft, Calendar as CalendarIcon } from 'lucide-react';
+import { Check, X, Plus, Play, Square, ArrowLeft, Calendar as CalendarIcon, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -116,10 +116,14 @@ export const DataEntry = () => {
         <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
           <ArrowLeft className="w-6 h-6" />
         </Button>
-        <div>
+        <div className="flex-1">
           <h1 className="text-3xl font-bold text-foreground">Data Entry</h1>
           <p className="text-muted-foreground">{student?.firstName} {student?.lastName}</p>
         </div>
+        <Button variant="outline" className="rounded-full shadow-sm hidden md:flex" onClick={() => navigate(`/student/${studentId}/print`)}>
+          <Printer className="w-4 h-4 mr-2" />
+          Print Data Sheet
+        </Button>
       </div>
 
       <Card className="border-0 shadow-md">

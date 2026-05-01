@@ -1,26 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { collection, query, where, onSnapshot, addDoc, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, doc, getDoc, getDocs, updateDoc, deleteDoc, limit } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Goal, Student, GoalBankItem, Objective, TrackingType, Domain } from '../types';
+import { Goal, Student, GoalBankItem, Objective, TrackingType, DOMAIN_OPTIONS } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Plus, Search, Archive, Target, Library, Trash2, Edit2, Settings } from 'lucide-react';
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
+import { ArrowLeft, Plus, Search, Archive, Target, Library, Trash2, Edit2, Settings, Printer, Check } from 'lucide-react';
+import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { toast } from 'sonner';
 
 export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean }) => {
   const { studentId } = useParams();
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const [confirmConfig, setConfirmConfig] = useState<{isOpen: boolean; title: string; message: string; onConfirm: () => void} | null>(null);
   
   const [student, setStudent] = useState<Student | null>(null);
   const [studentGoals, setStudentGoals] = useState<Goal[]>([]);
   const [goalBank, setGoalBank] = useState<GoalBankItem[]>([]);
-  const [domains, setDomains] = useState<Domain[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDomain, setSelectedDomain] = useState<string>('All');
 
@@ -30,37 +32,13 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
   const [editingBankItemId, setEditingBankItemId] = useState<string | null>(null);
   const [newGoal, setNewGoal] = useState<Partial<Goal>>({
     title: '',
-    domain: '',
+    domain: DOMAIN_OPTIONS[0],
+    skillLevel: 'Intermediate',
     trackingType: 'percentage',
     masteryCriteria: 80,
     objectives: []
   });
-
-  // Domain Management State
-  const [isManagingDomains, setIsManagingDomains] = useState(false);
-  const [newDomainName, setNewDomainName] = useState('');
-
-  useEffect(() => {
-    const qDomains = query(collection(db, 'domains'));
-    const unsubDomains = onSnapshot(qDomains, (snapshot) => {
-      const domainsData: Domain[] = [];
-      snapshot.forEach((doc) => {
-        domainsData.push({ id: doc.id, ...doc.data() } as Domain);
-      });
-      // Sort alphabetically
-      domainsData.sort((a, b) => a.name.localeCompare(b.name));
-      setDomains(domainsData);
-      
-      // Set default domain if none selected
-      if (domainsData.length > 0 && !newGoal.domain) {
-        setNewGoal(prev => ({ ...prev, domain: domainsData[0].name }));
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'domains');
-    });
-
-    return () => unsubDomains();
-  }, []);
+  const [saveToBank, setSaveToBank] = useState(false);
 
   useEffect(() => {
     if (studentId && !isBankView) {
@@ -89,6 +67,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
         });
         setStudentGoals(goalsData);
       }, (error) => {
+        console.error("Error fetching goals", error);
         handleFirestoreError(error, OperationType.LIST, 'goals');
       });
 
@@ -97,7 +76,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
   }, [studentId, isBankView]);
 
   useEffect(() => {
-    const q = query(collection(db, 'goalBank'));
+    const q = query(collection(db, 'goalBank'), where('status', 'in', ['pending', 'approved']));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const bankData: GoalBankItem[] = [];
       snapshot.forEach((doc) => {
@@ -105,6 +84,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
       });
       setGoalBank(bankData);
     }, (error) => {
+      console.error("Error fetching goalBank", error);
       handleFirestoreError(error, OperationType.LIST, 'goalBank');
     });
 
@@ -113,15 +93,29 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
 
   const filteredBank = goalBank.filter(item => {
     const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDomain = selectedDomain === 'All' || item.domain === selectedDomain;
-    const isApproved = item.status === 'approved';
-    return matchesSearch && matchesDomain && isApproved;
+    const matchesDomain = selectedDomain === 'All' || (item.domain || '').trim().toLowerCase() === selectedDomain.toLowerCase() || (item.domain || '').trim().toLowerCase().includes(selectedDomain.toLowerCase());
+    const isVisible = item.status === 'approved' || profile?.role === 'admin' || item.submittedBy === profile?.email;
+    return matchesSearch && matchesDomain && isVisible;
   });
+
+  const availableDomains = Array.from(new Set([
+    ...DOMAIN_OPTIONS,
+    ...goalBank.map(item => (item.domain || '').trim()).filter(d => d.length > 0)
+  ])).sort();
+
+  const goalsByDomainAndLevel = filteredBank.reduce((acc, goal) => {
+    const domain = (goal.domain || '').trim() || 'Uncategorized';
+    const skillLevel = goal.skillLevel || 'Intermediate';
+    if (!acc[domain]) acc[domain] = { Basic: [], Intermediate: [], Advanced: [] };
+    acc[domain][skillLevel].push(goal);
+    return acc;
+  }, {} as Record<string, Record<string, GoalBankItem[]>>);
 
   const handleImportGoal = (bankItem: GoalBankItem) => {
     setNewGoal({
       title: bankItem.title,
       domain: bankItem.domain,
+      skillLevel: bankItem.skillLevel || 'Intermediate',
       trackingType: bankItem.trackingType,
       masteryCriteria: 80,
       objectives: [...bankItem.defaultObjectives]
@@ -130,10 +124,21 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
     setIsBuildingBankItem(false);
   };
 
+  const handleApproveBankItem = async (id: string) => {
+    try {
+      await updateDoc(doc(db, 'goalBank', id), { status: 'approved' });
+      toast.success('Goal approved');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `goalBank/${id}`);
+      toast.error('Failed to approve goal');
+    }
+  };
+
   const handleEditBankItem = (bankItem: GoalBankItem) => {
     setNewGoal({
       title: bankItem.title,
       domain: bankItem.domain,
+      skillLevel: bankItem.skillLevel || 'Intermediate',
       trackingType: bankItem.trackingType,
       objectives: [...bankItem.defaultObjectives]
     });
@@ -143,14 +148,21 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
   };
 
   const handleDeleteBankItem = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this goal from the bank?')) return;
-    try {
-      await deleteDoc(doc(db, 'goalBank', id));
-      toast.success('Goal removed from bank');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `goalBank/${id}`);
-      toast.error('Failed to delete bank item');
-    }
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Delete Goal from Bank',
+      message: 'Are you sure you want to delete this goal from the bank?',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'goalBank', id));
+          toast.success('Goal removed from bank');
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, `goalBank/${id}`);
+          toast.error('Failed to delete bank item');
+        }
+        setConfirmConfig(null);
+      }
+    });
   };
 
   const handleSaveGoal = async () => {
@@ -164,6 +176,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
         const bankData: any = {
           title: newGoal.title,
           domain: newGoal.domain,
+          skillLevel: newGoal.skillLevel || 'Intermediate',
           trackingType: newGoal.trackingType,
           defaultObjectives: newGoal.objectives,
           status: profile?.role === 'admin' ? 'approved' : 'pending',
@@ -188,17 +201,31 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
           studentId,
           title: newGoal.title,
           domain: newGoal.domain,
+          skillLevel: newGoal.skillLevel || 'Intermediate',
           trackingType: newGoal.trackingType,
           masteryCriteria: newGoal.masteryCriteria,
           objectives: newGoal.objectives,
           status: 'active'
         });
+        if (saveToBank) {
+          await addDoc(collection(db, 'goalBank'), {
+            title: newGoal.title,
+            domain: newGoal.domain,
+            skillLevel: newGoal.skillLevel || 'Intermediate',
+            trackingType: newGoal.trackingType,
+            defaultObjectives: newGoal.objectives,
+            status: profile?.role === 'admin' ? 'approved' : 'pending',
+            submittedBy: profile?.email || 'system',
+            submittedByName: profile?.name || 'System'
+          });
+        }
         toast.success('Goal added successfully');
       }
       setIsBuilding(false);
       setIsBuildingBankItem(false);
       setEditingBankItemId(null);
-      setNewGoal({ title: '', domain: domains[0]?.name || '', trackingType: 'percentage', masteryCriteria: 80, objectives: [] });
+      setSaveToBank(false);
+      setNewGoal({ title: '', domain: DOMAIN_OPTIONS[0], skillLevel: 'Intermediate', trackingType: 'percentage', masteryCriteria: 80, objectives: [] });
     } catch (error) {
       handleFirestoreError(error, isBuildingBankItem ? (editingBankItemId ? OperationType.UPDATE : OperationType.CREATE) : OperationType.CREATE, isBuildingBankItem ? 'goalBank' : 'goals');
       toast.error('Failed to save goal');
@@ -239,58 +266,46 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
   };
 
   const handleIEPReview = async () => {
-    if (!confirm('Are you sure you want to archive all active goals? This is typically done during an IEP review.')) return;
-    try {
-      const activeGoals = studentGoals.filter(g => g.status === 'active');
-      const promises = activeGoals.map(g => updateDoc(doc(db, 'goals', g.id), { status: 'archived' }));
-      await Promise.all(promises);
-      toast.success('All active goals have been archived.');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'goals');
-      toast.error('Failed to archive goals');
-    }
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Archive Active Goals',
+      message: 'Are you sure you want to archive all active goals? This is typically done during an IEP review.',
+      onConfirm: async () => {
+        try {
+          const activeGoals = studentGoals.filter(g => g.status === 'active');
+          const promises = activeGoals.map(g => updateDoc(doc(db, 'goals', g.id), { status: 'archived' }));
+          await Promise.all(promises);
+          toast.success('All active goals have been archived.');
+        } catch (error) {
+          handleFirestoreError(error, OperationType.UPDATE, 'goals');
+          toast.error('Failed to archive goals');
+        }
+        setConfirmConfig(null);
+      }
+    });
   };
 
-  const handleAddDomain = async () => {
-    if (!newDomainName.trim()) return;
-    try {
-      await addDoc(collection(db, 'domains'), { name: newDomainName.trim() });
-      setNewDomainName('');
-      toast.success('Category added');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'domains');
-      toast.error('Failed to add category');
-    }
-  };
-
-  const handleDeleteDomain = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete the category "${name}"? Existing goals will keep this category name, but it won't be available for new goals.`)) return;
-    try {
-      await deleteDoc(doc(db, 'domains', id));
-      toast.success('Category deleted');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `domains/${id}`);
-      toast.error('Failed to delete category');
-    }
-  };
-
-  if (isBankView && !isBuilding && !isManagingDomains) {
+  if (isBankView && !isBuilding) {
     return (
       <div className="max-w-5xl mx-auto space-y-6">
+        {confirmConfig && (
+          <ConfirmModal 
+            isOpen={confirmConfig.isOpen} 
+            title={confirmConfig.title} 
+            message={confirmConfig.message} 
+            onConfirm={confirmConfig.onConfirm} 
+            onCancel={() => setConfirmConfig(null)} 
+          />
+        )}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Goal Bank</h1>
             <p className="text-muted-foreground">Browse and manage pre-written IEP goals</p>
           </div>
           <div className="flex gap-2">
-            {(profile?.role === 'admin' || profile?.role === 'editor') && (
-              <Button variant="outline" onClick={() => setIsManagingDomains(true)} className="rounded-full">
-                <Settings className="w-4 h-4 mr-2" /> Categories
-              </Button>
-            )}
             {(profile?.role === 'admin' || profile?.role === 'teacher' || profile?.role === 'editor') && (
               <Button onClick={() => {
-                setNewGoal({ title: '', domain: domains[0]?.name || '', trackingType: 'percentage', objectives: [] });
+                setNewGoal({ title: '', domain: DOMAIN_OPTIONS[0], skillLevel: 'Intermediate', trackingType: 'percentage', objectives: [] });
                 setIsBuilding(true);
                 setIsBuildingBankItem(true);
                 setEditingBankItemId(null);
@@ -319,50 +334,95 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
                 onChange={(e) => setSelectedDomain(e.target.value)}
               >
                 <option value="All">All Categories</option>
-                {domains.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                {availableDomains.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredBank.map(item => (
-                <Card key={item.id} className="border shadow-sm">
-                  <CardHeader className="pb-2">
-                    <div className="flex justify-between items-start">
-                      <CardTitle className="text-lg leading-tight">{item.title}</CardTitle>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium bg-primary/10 text-primary px-2 py-1 rounded-full whitespace-nowrap">
-                          {item.domain}
-                        </span>
-                        {(profile?.role === 'admin' || profile?.role === 'teacher' || profile?.role === 'editor') && (
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => handleEditBankItem(item)}>
-                              <Edit2 className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteBankItem(item.id)}>
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground mb-3 capitalize">Tracking: {item.trackingType}</p>
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold text-foreground uppercase tracking-wider">Sub-skills:</p>
-                      <ul className="list-disc pl-4 text-sm text-muted-foreground">
-                        {(item.defaultObjectives || []).map(obj => (
-                          <li key={obj.id}>{obj.title}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-              {filteredBank.length === 0 && (
-                <div className="col-span-full py-12 text-center text-muted-foreground">
+            <div className="space-y-4">
+              {filteredBank.length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground w-full">
                   No goals found matching your criteria.
                 </div>
+              ) : (
+                <Accordion type="multiple" className="w-full space-y-4">
+                  {Object.entries(goalsByDomainAndLevel).sort(([a], [b]) => a.localeCompare(b)).map(([domain, levels]) => {
+                    const domainTotal = Object.values(levels).reduce((sum, goals) => sum + goals.length, 0);
+                    return (
+                    <AccordionItem key={domain} value={domain} className="border rounded-xl shadow-sm bg-white overflow-hidden px-4">
+                      <AccordionTrigger className="hover:no-underline py-4">
+                        <div className="flex items-center text-lg font-semibold">
+                          {domain} <span className="ml-2 text-sm text-muted-foreground font-normal">({domainTotal})</span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="pt-2 pb-6 space-y-6">
+                        {['Basic', 'Intermediate', 'Advanced'].map(skillLevel => {
+                          const goals = (levels[skillLevel as keyof typeof levels] as GoalBankItem[]) || [];
+                          if (goals.length === 0) return null;
+                          return (
+                            <div key={skillLevel} className="space-y-3">
+                              <h3 className="text-md font-medium text-muted-foreground border-b pb-1 uppercase tracking-wider">{skillLevel} Skills</h3>
+                              <div className="grid grid-cols-1 gap-4">
+                                {goals.map(item => (
+                                  <Card key={item.id} className="border shadow-sm">
+                                    <CardHeader className="pb-2">
+                                      <div className="flex justify-between items-start">
+                                        <CardTitle className="text-lg leading-tight flex items-center gap-2">
+                                          {item.title}
+                                          {item.status === 'pending' && (
+                                            <span className="text-[10px] font-medium bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                              Pending
+                                            </span>
+                                          )}
+                                        </CardTitle>
+                                        <div className="flex items-center gap-2">
+                                          {(profile?.role === 'admin' || profile?.role === 'teacher' || profile?.role === 'editor') && (
+                                            <div className="flex gap-1">
+                                              {profile?.role === 'admin' && item.status === 'pending' && (
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600" onClick={() => handleApproveBankItem(item.id)}>
+                                                  <Check className="w-4 h-4" />
+                                                </Button>
+                                              )}
+                                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => handleEditBankItem(item)}>
+                                                <Edit2 className="w-4 h-4" />
+                                              </Button>
+                                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteBankItem(item.id)}>
+                                                <Trash2 className="w-4 h-4" />
+                                              </Button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                      <Accordion type="single" className="w-full">
+                                        <AccordionItem value="details" className="border-none">
+                                          <AccordionTrigger className="py-2 hover:no-underline px-0 text-sm font-medium text-muted-foreground">
+                                            View Sub-skills & Details
+                                          </AccordionTrigger>
+                                          <AccordionContent className="pt-2 pb-0 px-0">
+                                            <p className="text-sm text-muted-foreground mb-3 capitalize">Tracking: {item.trackingType}</p>
+                                            <div className="space-y-1">
+                                              <p className="text-xs font-semibold text-foreground uppercase tracking-wider">Sub-skills:</p>
+                                              <ul className="list-disc pl-4 text-sm text-muted-foreground">
+                                                {(item.defaultObjectives || []).map(obj => (
+                                                  <li key={obj.id}>{obj.title}</li>
+                                                ))}
+                                              </ul>
+                                            </div>
+                                          </AccordionContent>
+                                        </AccordionItem>
+                                      </Accordion>
+                                    </CardContent>
+                                  </Card>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </AccordionContent>
+                    </AccordionItem>
+                  )})}
+                </Accordion>
               )}
             </div>
           </CardContent>
@@ -371,57 +431,19 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
     );
   }
 
-  if (isManagingDomains) {
-    return (
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => setIsManagingDomains(false)}>
-            <ArrowLeft className="w-6 h-6" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Manage Categories</h1>
-            <p className="text-muted-foreground">Add or remove goal domains/categories</p>
-          </div>
-        </div>
 
-        <Card className="border-0 shadow-md">
-          <CardContent className="p-6">
-            <div className="flex gap-4 mb-8">
-              <Input 
-                placeholder="New category name..." 
-                value={newDomainName}
-                onChange={e => setNewDomainName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAddDomain()}
-                className="h-12 rounded-xl"
-              />
-              <Button onClick={handleAddDomain} className="h-12 rounded-xl px-6">
-                <Plus className="w-4 h-4 mr-2" /> Add
-              </Button>
-            </div>
-
-            <div className="space-y-2">
-              {domains.map(domain => (
-                <div key={domain.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border">
-                  <span className="font-medium">{domain.name}</span>
-                  <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => handleDeleteDomain(domain.id, domain.name)}>
-                    <Trash2 className="w-5 h-5" />
-                  </Button>
-                </div>
-              ))}
-              {domains.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  No categories defined. Add one above.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
+      {confirmConfig && (
+        <ConfirmModal 
+          isOpen={confirmConfig.isOpen} 
+          title={confirmConfig.title} 
+          message={confirmConfig.message} 
+          onConfirm={confirmConfig.onConfirm} 
+          onCancel={() => setConfirmConfig(null)} 
+        />
+      )}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
           <ArrowLeft className="w-6 h-6" />
@@ -440,6 +462,10 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
               <TabsTrigger value="archived" className="rounded-full px-6">Archived</TabsTrigger>
             </TabsList>
             <div className="flex gap-2">
+              <Button variant="outline" onClick={() => navigate(`/student/${studentId}/print`)} className="rounded-full h-12 px-6">
+                <Printer className="w-5 h-5 mr-2" />
+                Print Data Sheet
+              </Button>
               <Button variant="outline" onClick={handleIEPReview} className="rounded-full h-12 px-6 text-amber-600 border-amber-200 hover:bg-amber-50">
                 <Archive className="w-5 h-5 mr-2" />
                 IEP Review (Archive All)
@@ -525,7 +551,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
                 />
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Category (Domain)</Label>
                   <select 
@@ -533,7 +559,19 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
                     value={newGoal.domain}
                     onChange={e => setNewGoal({...newGoal, domain: e.target.value})}
                   >
-                    {domains.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                    {DOMAIN_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Skill Level</Label>
+                  <select 
+                    className="flex h-12 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                    value={newGoal.skillLevel || 'Intermediate'}
+                    onChange={e => setNewGoal({...newGoal, skillLevel: e.target.value as any})}
+                  >
+                    <option value="Basic">Basic</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
                   </select>
                 </div>
                 <div className="space-y-2">
@@ -593,15 +631,29 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
                 </div>
               </div>
 
-              <div className="pt-6 flex justify-end gap-3">
-                <Button variant="ghost" onClick={() => {
-                  setIsBuilding(false);
-                  setIsBuildingBankItem(false);
-                  setEditingBankItemId(null);
-                }} className="rounded-full">Cancel</Button>
-                <Button onClick={handleSaveGoal} className="rounded-full px-8">
-                  {isBuildingBankItem ? (editingBankItemId ? 'Update Bank Goal' : (profile?.role === 'admin' ? 'Add to Bank' : 'Submit for Approval')) : 'Save Goal'}
-                </Button>
+              <div className="pt-6 flex items-center justify-between">
+                {!isBuildingBankItem && (
+                  <div className="flex items-center space-x-2">
+                    <input 
+                      type="checkbox" 
+                      id="saveToBankCheckbox"
+                      checked={saveToBank}
+                      onChange={(e) => setSaveToBank(e.target.checked)}
+                      className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                    />
+                    <Label htmlFor="saveToBankCheckbox" className="text-sm cursor-pointer whitespace-nowrap">Save to Goal Bank</Label>
+                  </div>
+                )}
+                <div className="flex justify-end gap-3 flex-1">
+                  <Button variant="ghost" onClick={() => {
+                    setIsBuilding(false);
+                    setIsBuildingBankItem(false);
+                    setEditingBankItemId(null);
+                  }} className="rounded-full">Cancel</Button>
+                  <Button onClick={handleSaveGoal} className="rounded-full px-8">
+                    {isBuildingBankItem ? (editingBankItemId ? 'Update Bank Goal' : (profile?.role === 'admin' ? 'Add to Bank' : 'Submit for Approval')) : 'Save Goal'}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

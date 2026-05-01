@@ -9,6 +9,8 @@ import { DataEntry } from './pages/DataEntry';
 import { MassEntry } from './pages/MassEntry';
 import { GoalManagement } from './pages/GoalManagement';
 import { ProgressGraph } from './pages/ProgressGraph';
+import { PrintDataSheet } from './pages/PrintDataSheet';
+import { IEPUpload } from './pages/IEPUpload';
 import { AdminPanel } from './pages/AdminPanel';
 import { LinkDevice } from './pages/LinkDevice';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -47,10 +49,12 @@ export default function App() {
               </ProtectedRoute>
             }>
               <Route index element={<Dashboard />} />
+              <Route path="iep-upload" element={<IEPUpload />} />
               <Route path="student/:studentId" element={<StudentView />} />
               <Route path="student/:studentId/data" element={<DataEntry />} />
               <Route path="student/:studentId/mass" element={<MassEntry />} />
               <Route path="student/:studentId/goals" element={<GoalManagement />} />
+              <Route path="student/:studentId/print" element={<PrintDataSheet />} />
               <Route path="student/:studentId/graph" element={<ProgressGraph />} />
               <Route path="student/:studentId/history" element={<ProgressGraph isHistory />} />
               <Route path="goals" element={<GoalManagement isBankView />} />

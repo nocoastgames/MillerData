@@ -23,7 +23,7 @@ async function startServer() {
     });
   }
 
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
 
   // API Routes
   app.post('/api/auth/get-custom-token', async (req, res) => {
@@ -90,6 +90,107 @@ async function startServer() {
     } catch (error: any) {
       console.error('Error authorizing remote login:', error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/gemini/extract-iep', async (req, res) => {
+    try {
+      const { mimeType, data, apiKey: clientApiKey, goalBank } = req.body;
+      if (!data) return res.status(400).json({ error: 'Missing file data' });
+
+      // @google/genai SDK
+      const { GoogleGenAI, Type } = await import('@google/genai');
+      
+      let apiKey = clientApiKey || process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey.trim() === '' || apiKey.toLowerCase() === 'free' || apiKey === 'MY_GEMINI_API_KEY') {
+        return res.status(400).json({ 
+          error: 'Missing or invalid GEMINI_API_KEY. To use the free tier, please open Settings -> Secrets, click the RED TRASH CAN icon next to GEMINI_API_KEY to completely delete the secret (do not just clear the text). After deleting it, the system will provide a free key automatically.' 
+        });
+      }
+      
+      const ai = new GoogleGenAI({ apiKey });
+
+      const goalBankContext = goalBank && goalBank.length > 0 
+        ? `\n\nExisting Goal Bank for reference. If a goal from the document is extremely similar to an existing goal bank template, please modify the extracted goal slightly so it aligns with our goal bank template's phrasing. If it's a new goal not in the bank, extract it as a generic template that can be added to the goal bank:\n${JSON.stringify(goalBank, null, 2)}`
+        : '';
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                data,
+                mimeType
+              }
+            },
+            {
+              text: `You are an expert Special Education Assistant.
+Extract the student's information and all IEP goals from the provided document (such as a Nevada/Infinite Campus IEP).
+- Look for the student name (often formatted as "Last, First" or "Name: Last, First") and ID. First name and last name should be separated correctly.
+- Look for sections titled like "MEASURABLE ANNUAL GOAL", "IEP GOALS, INCLUDING ACADEMIC AND FUNCTIONAL GOALS", or "BENCHMARKS OR SHORT-TERM OBJECTIVES" to find the goals.
+- The goal domain or category might be at the start of the goal text (e.g., "Functional Reading:", "Functional Math:").
+- For trackingType, pick one of: "percentage", "frequency", "duration". If not specified, estimate based on the mastery criteria (e.g., if criteria mentions "60%", trackingType is percentage). Extract numerical mastery Criteria (e.g., "60" instead of "60%").
+- Extract each "BENCHMARK OR SHORT-TERM OBJECTIVE" associated with the goal as an objective. Ensure you capture the full text of the objective.
+- IMPORTANT: When extracting the text for goals and objectives, do NOT include the actual student's name or gendered pronouns. Replace the student's name with "the Student" or "Student", and replace specific pronouns with generic equivalents like "he/she", "his/hers", or "him/her". Provide these as generalized templates that fit nicely into a standard goal bank.${goalBankContext}`
+            }
+          ]
+        },
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              student: {
+                type: Type.OBJECT,
+                properties: {
+                  firstName: { type: Type.STRING },
+                  lastName: { type: Type.STRING },
+                  studentId: { type: Type.STRING, description: "Student ID number if found" }
+                },
+                required: ["firstName", "lastName"]
+              },
+              goals: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING, description: "The descriptive title or text of the goal" },
+                    domain: { type: Type.STRING, description: "Category/Domain (e.g. Reading, Math, Behavior)" },
+                    trackingType: { type: Type.STRING, description: "percentage, frequency, or duration" },
+                    masteryCriteria: { type: Type.INTEGER, description: "Numeric criteria, e.g. 80 for 80%" },
+                    objectives: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          title: { type: Type.STRING, description: "Sub-skill or objective text" }
+                        },
+                        required: ["title"]
+                      }
+                    }
+                  },
+                  required: ["title", "domain", "trackingType", "objectives"]
+                }
+              }
+            },
+            required: ["student", "goals"]
+          }
+        }
+      });
+
+      const text = response.text;
+      if (!text) throw new Error("No text returned from Gemini");
+      
+      const json = JSON.parse(text);
+      res.json(json);
+    } catch (error: any) {
+      console.error('Error in /api/gemini/extract-iep:', error);
+      let errorMessage = error.message || 'Error occurred';
+      if (errorMessage.includes('API key not valid')) {
+          errorMessage = 'It looks like you copied the placeholder API key or entered an invalid one. Please open the Settings menu, navigate to Secrets, and either delete the GEMINI_API_KEY to use the free tier, or replace it with your actual valid Gemini API key.';
+      }
+      res.status(500).json({ error: errorMessage });
     }
   });
 

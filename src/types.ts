@@ -20,10 +20,24 @@ export interface Student {
 
 export type TrackingType = 'percentage' | 'frequency' | 'duration';
 
+export type SkillLevel = 'Basic' | 'Intermediate' | 'Advanced';
+
 export interface Objective {
   id: string;
   title: string;
 }
+
+export const DOMAIN_OPTIONS = [
+  'Reading',
+  'Writing',
+  'Math',
+  'Behavior',
+  'Social Emotional',
+  'Speech/Language',
+  'Adaptive/Life Skills',
+  'Motor Skills',
+  'Other'
+];
 
 export interface Domain {
   id: string;
@@ -35,6 +49,7 @@ export interface Goal {
   studentId: string;
   title: string;
   domain: string;
+  skillLevel?: SkillLevel;
   trackingType: TrackingType;
   masteryCriteria: number;
   objectives: Objective[];
@@ -57,6 +72,7 @@ export interface GoalBankItem {
   id: string;
   title: string;
   domain: string;
+  skillLevel?: SkillLevel;
   trackingType: TrackingType;
   defaultObjectives: Objective[];
   status: 'pending' | 'approved';

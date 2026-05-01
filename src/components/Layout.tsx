@@ -9,7 +9,8 @@ import {
   Library, 
   LogOut, 
   Menu,
-  X
+  X,
+  UploadCloud
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { APP_VERSION } from '../version';
@@ -31,14 +32,18 @@ export const Layout = () => {
     { name: 'Goal Bank', path: '/goals', icon: Library },
   ];
 
+  if (profile?.role === 'admin' || profile?.role === 'teacher' || profile?.role === 'editor') {
+    navItems.push({ name: 'Upload IEP', path: '/iep-upload', icon: UploadCloud });
+  }
+
   if (profile?.role === 'admin') {
     navItems.push({ name: 'Admin Panel', path: '/admin', icon: Users });
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col md:flex-row">
+    <div className="min-h-screen bg-background flex flex-col md:flex-row print:min-h-0 print:block">
       {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between p-4 bg-primary text-primary-foreground">
+      <div className="md:hidden flex items-center justify-between p-4 bg-primary text-primary-foreground print:hidden">
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain bg-white rounded-full p-1" onError={(e) => e.currentTarget.style.display = 'none'} />
           <span className="font-bold text-lg">Miller Data</span>
@@ -51,7 +56,7 @@ export const Layout = () => {
       {/* Sidebar */}
       <div className={`
         fixed inset-y-0 left-0 z-50 w-64 bg-primary text-primary-foreground transform transition-transform duration-200 ease-in-out
-        md:relative md:translate-x-0 flex flex-col
+        md:relative md:translate-x-0 flex flex-col print:hidden
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="p-6 hidden md:flex items-center gap-3">
@@ -103,8 +108,8 @@ export const Layout = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden h-screen">
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-muted/30">
+      <div className="flex-1 flex flex-col overflow-hidden h-screen print:h-auto print:block print:overflow-visible">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-muted/30 print:bg-white print:p-0 print:overflow-visible">
           <Outlet />
         </main>
       </div>
