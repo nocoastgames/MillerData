@@ -253,6 +253,80 @@ Extract the student's information and all IEP goals from the provided document (
     }
   });
 
+  app.post('/api/gemini/generate-goal', async (req, res) => {
+    try {
+      const { domain, skills, studentAge, extraInfo, presentLevels, apiKey: clientApiKey } = req.body;
+      if (!domain || !skills) {
+        return res.status(400).json({ error: 'Domain and skills are required to generate a goal' });
+      }
+
+      const { GoogleGenAI, Type } = await import('@google/genai');
+      let apiKey = clientApiKey || process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey.trim() === '' || apiKey.toLowerCase() === 'free' || apiKey === 'MY_GEMINI_API_KEY') {
+        return res.status(400).json({ 
+          error: 'Missing or invalid GEMINI_API_KEY. To use the free tier, please open Settings -> Secrets, click the RED TRASH CAN icon next to GEMINI_API_KEY to completely delete the secret (do not just clear the text). After deleting it, the system will provide a free key automatically.' 
+        });
+      }
+      const ai = new GoogleGenAI({ apiKey });
+
+      const promptContext = `
+        You are an expert Special Education Specialist creating highly effective, measurable IEP (Individualized Education Program) goals.
+        I want you to generate a draft goal and its required sub-skills (objectives) based on the following:
+        
+        Domain/Category: ${domain}
+        Desired Skills / Needs: ${skills}
+        ${presentLevels ? `Student Present Levels / Report Card notes: ${presentLevels}` : ''}
+        ${studentAge ? `Student Grade/Age reference: ${studentAge}` : ''}
+        ${extraInfo ? `Extra context: ${extraInfo}` : ''}
+        
+        Ensure the goal is SMART (Specific, Measurable, Attainable, Relevant, Time-bound). Do not include the student's name, just write it as a general bank goal (e.g. "The student will...").
+        Return the structured response matching the schema. Select a sensible tracking type (percentage, frequency, or duration) that matches how this skill is usually measured.
+      `;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: promptContext,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING, description: "The measurable annual goal statement." },
+              domain: { type: Type.STRING, description: "Normalized domain/category." },
+              skillLevel: { type: Type.STRING, description: "Basic, Intermediate, or Advanced" },
+              trackingType: { type: Type.STRING, description: "percentage, frequency, or duration" },
+              objectives: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING, description: "Short description of the sub-skill objective" }
+                  }
+                }
+              }
+            },
+            required: ["title", "domain", "skillLevel", "trackingType", "objectives"]
+          }
+        }
+      });
+
+      if (!response.text) {
+        throw new Error('No response from Gemini API');
+      }
+
+      const parsedData = JSON.parse(response.text);
+      res.json(parsedData);
+    } catch (error: any) {
+      console.error('Error in /api/gemini/generate-goal:', error);
+      let errorMessage = error instanceof Error ? error.message : 'Failed to generate goal from text';
+      
+      if (errorMessage.includes('API key not valid')) {
+          errorMessage = 'It looks like you copied the placeholder API key or entered an invalid one. Please open the Settings menu, navigate to Secrets, and either delete the GEMINI_API_KEY to use the free tier, or replace it with your actual valid Gemini API key.';
+      }
+      res.status(500).json({ error: errorMessage });
+    }
+  });
+
   app.post('/api/gemini/analyze-bank', async (req, res) => {
     try {
       const { goalBank, apiKey: clientApiKey } = req.body;

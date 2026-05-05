@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
-import { ArrowLeft, Plus, Search, Archive, Target, Library, Trash2, Edit2, Settings, Printer, Check, Merge, Wand2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Archive, Target, Library, Trash2, Edit2, Settings, Printer, Check, Merge, Wand2, Loader2, Sparkles, X } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -47,6 +47,55 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
   const [isMerging, setIsMerging] = useState(false);
   const [mergeProposals, setMergeProposals] = useState<any[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // AI Generation State
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiPromptSkills, setAiPromptSkills] = useState('');
+  const [aiPromptPresentLevels, setAiPromptPresentLevels] = useState('');
+  const [showAiGenerator, setShowAiGenerator] = useState(false);
+
+  const handleGenerateAIGoal = async () => {
+    if (!aiPromptSkills.trim()) {
+      toast.error('Please enter the desired skills or needs');
+      return;
+    }
+    
+    setIsGeneratingAI(true);
+    try {
+      const res = await fetch('/api/gemini/generate-goal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          domain: newGoal.domain || 'Communication',
+          skills: aiPromptSkills,
+          presentLevels: aiPromptPresentLevels,
+          studentAge: student ? `${student.grade || ''}` : ''
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to generate goal');
+      }
+      
+      const generated = await res.json();
+      setNewGoal(prev => ({
+        ...prev,
+        title: generated.title,
+        domain: generated.domain && DOMAIN_OPTIONS.includes(generated.domain) ? generated.domain : prev.domain,
+        skillLevel: generated.skillLevel || prev.skillLevel,
+        trackingType: generated.trackingType || prev.trackingType,
+        objectives: generated.objectives.map((o: any) => ({ title: o.title, id: Math.random().toString(36).substring(7) }))
+      }));
+      setAiPromptSkills('');
+      setAiPromptPresentLevels('');
+      setShowAiGenerator(false);
+      toast.success('Draft goal generated successfully! Please review and modify as needed.');
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
 
   useEffect(() => {
     if (studentId && !isBankView) {
@@ -99,20 +148,27 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
     return () => unsubscribe();
   }, []);
 
+  const normalizeDomain = (domain: string) => {
+    const lower = domain.trim().toLowerCase();
+    if (lower.includes('communication')) return 'Communication';
+    return domain.trim() || 'Uncategorized';
+  };
+
   const filteredBank = goalBank.filter(item => {
     const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDomain = selectedDomain === 'All' || (item.domain || '').trim().toLowerCase() === selectedDomain.toLowerCase() || (item.domain || '').trim().toLowerCase().includes(selectedDomain.toLowerCase());
+    const itemDomain = normalizeDomain(item.domain || '');
+    const matchesDomain = selectedDomain === 'All' || itemDomain.toLowerCase() === selectedDomain.toLowerCase() || itemDomain.toLowerCase().includes(selectedDomain.toLowerCase());
     const isVisible = item.status === 'approved' || profile?.role === 'admin' || item.submittedBy === profile?.email;
     return matchesSearch && matchesDomain && isVisible;
   });
 
   const availableDomains = Array.from(new Set([
     ...DOMAIN_OPTIONS,
-    ...goalBank.map(item => (item.domain || '').trim()).filter(d => d.length > 0)
+    ...goalBank.map(item => normalizeDomain(item.domain || '')).filter(d => d.length > 0 && d !== 'Uncategorized')
   ])).sort();
 
   const goalsByDomainAndLevel = filteredBank.reduce((acc, goal) => {
-    const domain = (goal.domain || '').trim() || 'Uncategorized';
+    const domain = normalizeDomain(goal.domain || '');
     const skillLevel = goal.skillLevel || 'Intermediate';
     if (!acc[domain]) acc[domain] = { Basic: [], Intermediate: [], Advanced: [] };
     acc[domain][skillLevel].push(goal);
@@ -678,6 +734,80 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
           onCancel={() => setConfirmConfig(null)} 
         />
       )}
+      {showAiGenerator && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-background border rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+            <div className="sticky top-0 bg-background/95 backdrop-blur z-10 border-b px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-indigo-600" />
+                </div>
+                <h3 className="text-xl font-bold text-indigo-900">Draft Goal with AI</h3>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setShowAiGenerator(false)} className="rounded-full">
+                <X className="w-5 h-5 text-slate-500" />
+              </Button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Category (Domain)</Label>
+                <select 
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  value={newGoal.domain || 'Communication'}
+                  onChange={e => setNewGoal({...newGoal, domain: e.target.value})}
+                >
+                  {DOMAIN_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Present Levels / Recent Report Card Notes</Label>
+                <textarea 
+                  value={aiPromptPresentLevels}
+                  onChange={(e) => setAiPromptPresentLevels(e.target.value)}
+                  placeholder="Paste teacher notes, present levels of performance, recent data, or report card comments here..."
+                  className="w-full min-h-[120px] rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <p className="text-xs text-muted-foreground">Optional, but helps tailor the goal to the student's exact current performance.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Desired Skills / Target Needs <span className="text-red-500">*</span></Label>
+                <textarea 
+                  value={aiPromptSkills}
+                  onChange={(e) => setAiPromptSkills(e.target.value)}
+                  placeholder="e.g. Needs to ask for breaks, use a choice board, and greet peers..."
+                  className="w-full min-h-[80px] rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.ctrlKey) {
+                      handleGenerateAIGoal();
+                    }
+                  }}
+                />
+                <p className="text-xs text-indigo-600">The AI will use the ({newGoal.domain || 'Communication'}) category, present levels, and desired skills to generate a SMART goal and its objectives. Press Ctrl+Enter to generate.</p>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-slate-50 border-t px-6 py-4 flex justify-end gap-3 rounded-b-2xl">
+              <Button variant="outline" onClick={() => setShowAiGenerator(false)} className="rounded-full">
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleGenerateAIGoal} 
+                disabled={isGeneratingAI || !aiPromptSkills.trim()}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-6"
+              >
+                {isGeneratingAI ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</>
+                ) : (
+                  <><Wand2 className="w-4 h-4 mr-2" /> Generate Goal & Objectives</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
           <ArrowLeft className="w-6 h-6" />
@@ -771,8 +901,17 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Goal Builder Form */}
           <Card className="lg:col-span-2 border-0 shadow-md order-2 lg:order-1">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle>{isBuildingBankItem ? (editingBankItemId ? 'Edit Bank Goal' : 'Add to Goal Bank') : 'Goal Builder'}</CardTitle>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className={`rounded-full transition-colors ${showAiGenerator ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : ''}`}
+                onClick={() => setShowAiGenerator(!showAiGenerator)}
+              >
+                <Wand2 className="w-4 h-4 mr-2" /> 
+                {showAiGenerator ? 'Close AI Draft' : 'Draft via AI'}
+              </Button>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
