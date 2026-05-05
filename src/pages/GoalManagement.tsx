@@ -10,9 +10,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
-import { ArrowLeft, Plus, Search, Archive, Target, Library, Trash2, Edit2, Settings, Printer, Check } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Archive, Target, Library, Trash2, Edit2, Settings, Printer, Check, Merge, Wand2, Loader2 } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { toast } from 'sonner';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean }) => {
   const { studentId } = useParams();
@@ -39,6 +40,13 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
     objectives: []
   });
   const [saveToBank, setSaveToBank] = useState(false);
+
+  // Merge Mode States
+  const [isMergeMode, setIsMergeMode] = useState(false);
+  const [selectedForMerge, setSelectedForMerge] = useState<string[]>([]);
+  const [isMerging, setIsMerging] = useState(false);
+  const [mergeProposals, setMergeProposals] = useState<any[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
     if (studentId && !isBankView) {
@@ -112,8 +120,37 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
   }, {} as Record<string, Record<string, GoalBankItem[]>>);
 
   const handleImportGoal = (bankItem: GoalBankItem) => {
+    let formattedTitle = bankItem.title;
+    
+    // Only format if we are importing for a specific student (not just building bank items)
+    if (student) {
+      const studentName = student.firstName || 'Student';
+      let baseAction = bankItem.title;
+      
+      const lowerTitle = baseAction.toLowerCase();
+      if (lowerTitle.startsWith('student will ')) {
+        baseAction = bankItem.title.substring(13);
+      } else if (lowerTitle.startsWith('the student will ')) {
+        baseAction = bankItem.title.substring(17);
+      }
+
+      const masteryCriteria = 80;
+      let criteriaText = '';
+      if (bankItem.trackingType === 'percentage') {
+        criteriaText = `to ${masteryCriteria}% accuracy`;
+      } else if (bankItem.trackingType === 'frequency') {
+        criteriaText = `for ${masteryCriteria} occurrences`;
+      } else if (bankItem.trackingType === 'duration') {
+        criteriaText = `for ${masteryCriteria} minutes`;
+      } else {
+        criteriaText = `to criteria`;
+      }
+
+      formattedTitle = `By annual review, ${studentName} will ${baseAction} ${criteriaText} supported by teaching staff.`;
+    }
+
     setNewGoal({
-      title: bankItem.title,
+      title: formattedTitle,
       domain: bankItem.domain,
       skillLevel: bankItem.skillLevel || 'Intermediate',
       trackingType: bankItem.trackingType,
@@ -145,6 +182,91 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
     setEditingBankItemId(bankItem.id);
     setIsBuilding(true);
     setIsBuildingBankItem(true);
+  };
+
+  const handleAIMergeSelected = async () => {
+    if (selectedForMerge.length < 2) return;
+    setIsMerging(true);
+    try {
+      const dbGoals = goalBank.filter(g => selectedForMerge.includes(g.id));
+      const res = await fetch('/api/gemini/merge-goals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goalsToMerge: dbGoals })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to merge goals');
+      }
+      
+      const mergedGoal = await res.json();
+      setNewGoal({
+        title: mergedGoal.title,
+        domain: mergedGoal.domain,
+        skillLevel: mergedGoal.skillLevel || 'Intermediate',
+        trackingType: mergedGoal.trackingType,
+        masteryCriteria: 80,
+        objectives: mergedGoal.objectives.map((o: any) => ({ ...o, id: Math.random().toString(36).substring(7) }))
+      });
+      // Clear selection and mode
+      setSelectedForMerge([]);
+      setIsMergeMode(false);
+      setIsBuildingBankItem(true);
+      setEditingBankItemId(null);
+      setIsBuilding(true);
+      toast.success('Goals merged successfully! Please review the result.');
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsMerging(false);
+    }
+  };
+
+  const handleAnalyzeBank = async () => {
+    setIsAnalyzing(true);
+    try {
+      const res = await fetch('/api/gemini/analyze-bank', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goalBank: filteredBank })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to analyze bank');
+      }
+      const data = await res.json();
+      setMergeProposals(data.mergeProposals || []);
+      if (data.mergeProposals?.length === 0) {
+        toast.info('No merge suggestions found for these goals.');
+      } else {
+        toast.success(`Found ${data.mergeProposals.length} merge suggestions.`);
+      }
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleAcceptProposal = (proposal: any) => {
+    setNewGoal({
+      title: proposal.mergedGoal.title,
+      domain: proposal.mergedGoal.domain,
+      skillLevel: proposal.mergedGoal.skillLevel || 'Intermediate',
+      trackingType: proposal.mergedGoal.trackingType,
+      masteryCriteria: 80,
+      objectives: proposal.mergedGoal.objectives.map((o: any) => ({ ...o, id: Math.random().toString(36).substring(7) }))
+    });
+    setIsBuildingBankItem(true);
+    setEditingBankItemId(null);
+    setIsBuilding(true);
+    setMergeProposals(mergeProposals.filter(p => p !== proposal));
+  };
+  
+  const handleToggleMergeSelection = (id: string) => {
+    setSelectedForMerge(prev => 
+      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+    );
   };
 
   const handleDeleteBankItem = async (id: string) => {
@@ -304,17 +426,120 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
           </div>
           <div className="flex gap-2">
             {(profile?.role === 'admin' || profile?.role === 'teacher' || profile?.role === 'editor') && (
-              <Button onClick={() => {
-                setNewGoal({ title: '', domain: DOMAIN_OPTIONS[0], skillLevel: 'Intermediate', trackingType: 'percentage', objectives: [] });
-                setIsBuilding(true);
-                setIsBuildingBankItem(true);
-                setEditingBankItemId(null);
-              }} className="rounded-full">
-                <Plus className="w-4 h-4 mr-2" /> {profile?.role === 'admin' ? 'Add to Bank' : 'Suggest Goal'}
-              </Button>
+              <>
+                <Button 
+                  variant={isMergeMode ? 'default' : 'outline'}
+                  onClick={() => {
+                    setIsMergeMode(!isMergeMode);
+                    setSelectedForMerge([]);
+                  }} 
+                  className="rounded-full"
+                >
+                  <Merge className="w-4 h-4 mr-2" />
+                  {isMergeMode ? 'Cancel Merge' : 'Manual Merge'}
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={handleAnalyzeBank} 
+                  disabled={isAnalyzing}
+                  className="rounded-full"
+                >
+                  {isAnalyzing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wand2 className="w-4 h-4 mr-2 text-indigo-500" />}
+                  Auto-Analyze
+                </Button>
+                <Button onClick={() => {
+                  setNewGoal({ title: '', domain: DOMAIN_OPTIONS[0], skillLevel: 'Intermediate', trackingType: 'percentage', objectives: [] });
+                  setIsBuilding(true);
+                  setIsBuildingBankItem(true);
+                  setEditingBankItemId(null);
+                }} className="rounded-full">
+                  <Plus className="w-4 h-4 mr-2" /> {profile?.role === 'admin' ? 'Add to Bank' : 'Suggest Goal'}
+                </Button>
+              </>
             )}
           </div>
         </div>
+
+        {isMergeMode && (
+          <Card className="border-indigo-200 bg-indigo-50 shadow-sm sticky top-4 z-10">
+            <CardHeader className="py-4">
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-lg text-indigo-900 flex items-center">
+                  <Merge className="w-5 h-5 mr-2" />
+                  Select Goals to Merge
+                </CardTitle>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-medium text-indigo-700">
+                    {selectedForMerge.length} selected
+                  </span>
+                  <Button 
+                    onClick={handleAIMergeSelected} 
+                    disabled={selectedForMerge.length < 2 || isMerging}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full"
+                  >
+                    {isMerging ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wand2 className="w-4 h-4 mr-2" />}
+                    AI Merge Selected
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+          </Card>
+        )}
+
+        {mergeProposals.length > 0 && !isMergeMode && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold text-indigo-900 flex items-center">
+              <Wand2 className="w-5 h-5 mr-2 text-indigo-600" />
+              AI Merge Suggestions
+            </h2>
+            <div className="grid grid-cols-1 gap-4">
+              {mergeProposals.map((proposal, idx) => (
+                <Card key={idx} className="border-indigo-100 bg-white shadow-sm overflow-hidden">
+                  <div className="bg-indigo-50 px-4 py-2 border-b border-indigo-100 flex justify-between items-center">
+                    <span className="text-sm font-medium text-indigo-800">Merge Suggestion</span>
+                    <Button 
+                      size="sm"
+                      onClick={() => handleAcceptProposal(proposal)}
+                      className="h-8 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full"
+                    >
+                      <Check className="w-3 h-3 mr-1" /> Accept & Edit
+                    </Button>
+                  </div>
+                  <CardContent className="p-4 space-y-4">
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Reason</p>
+                      <p className="text-sm text-slate-700">{proposal.reason}</p>
+                    </div>
+                    <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Original Goals to be Merged</p>
+                        <ul className="list-disc pl-4 text-sm text-slate-600 space-y-1">
+                          {proposal.originalGoalIds.map((id: string) => {
+                            const original = goalBank.find(g => g.id === id);
+                            return original ? <li key={id}>{original.title}</li> : null;
+                          })}
+                        </ul>
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                      <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-2">Proposed Merged Goal</p>
+                      <p className="text-sm font-medium text-slate-900 mb-2">{proposal.mergedGoal.title}</p>
+                      <div className="flex gap-2 mb-3">
+                        <span className="text-[10px] uppercase tracking-wider bg-slate-200 px-2 py-0.5 rounded-full">{proposal.mergedGoal.domain}</span>
+                        <span className="text-[10px] uppercase tracking-wider bg-slate-200 px-2 py-0.5 rounded-full">{proposal.mergedGoal.skillLevel}</span>
+                        <span className="text-[10px] uppercase tracking-wider bg-slate-200 px-2 py-0.5 rounded-full">{proposal.mergedGoal.trackingType}</span>
+                      </div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Proposed Objectives</p>
+                      <ul className="list-disc pl-4 text-sm text-slate-600">
+                        {proposal.mergedGoal.objectives.map((obj: any, i: number) => (
+                          <li key={i}>{obj.title}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
 
         <Card className="border-0 shadow-md">
           <CardContent className="p-6">
@@ -366,13 +591,22 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
                                   <Card key={item.id} className="border shadow-sm">
                                     <CardHeader className="pb-2">
                                       <div className="flex justify-between items-start">
-                                        <CardTitle className="text-lg leading-tight flex items-center gap-2">
-                                          {item.title}
-                                          {item.status === 'pending' && (
-                                            <span className="text-[10px] font-medium bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                              Pending
-                                            </span>
+                                        <CardTitle className="text-lg leading-tight flex items-start gap-3">
+                                          {isMergeMode && (
+                                            <Checkbox 
+                                              checked={selectedForMerge.includes(item.id)}
+                                              onCheckedChange={() => handleToggleMergeSelection(item.id)}
+                                              className="mt-1"
+                                            />
                                           )}
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            {item.title}
+                                            {item.status === 'pending' && (
+                                              <span className="text-[10px] font-medium bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                                Pending
+                                              </span>
+                                            )}
+                                          </div>
                                         </CardTitle>
                                         <div className="flex items-center gap-2">
                                           {(profile?.role === 'admin' || profile?.role === 'teacher' || profile?.role === 'editor') && (

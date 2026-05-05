@@ -72,7 +72,7 @@
     --chart-3: #3b82f6;
     --chart-4: #eab308;
     --chart-5: #60a5fa;
-    --radius: 3rem; /* Large rounded corners */
+    --radius: 0rem; /* No rounded corners */
     --sidebar: #ffffff;
     --sidebar-foreground: #0f172a;
     --sidebar-primary: #1e3a8a;

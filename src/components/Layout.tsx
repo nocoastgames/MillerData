@@ -73,7 +73,7 @@ export const Layout = () => {
                 key={item.path}
                 to={item.path}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors ${
+                className={`flex items-center gap-3 px-4 py-3 rounded-none transition-colors ${
                   isActive 
                     ? 'bg-secondary text-secondary-foreground font-medium' 
                     : 'hover:bg-primary-foreground/10'
@@ -95,7 +95,7 @@ export const Layout = () => {
           </div>
           <Button 
             variant="ghost" 
-            className="w-full justify-start text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground rounded-2xl"
+            className="w-full justify-start text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground rounded-none"
             onClick={handleSignOut}
           >
             <LogOut className="w-5 h-5 mr-3" />

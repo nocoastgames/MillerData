@@ -194,6 +194,148 @@ Extract the student's information and all IEP goals from the provided document (
     }
   });
 
+  app.post('/api/gemini/merge-goals', async (req, res) => {
+    try {
+      const { goalsToMerge, apiKey: clientApiKey } = req.body;
+      if (!goalsToMerge || !Array.isArray(goalsToMerge) || goalsToMerge.length < 2) {
+        return res.status(400).json({ error: 'Provide at least two goals to merge' });
+      }
+
+      const { GoogleGenAI, Type } = await import('@google/genai');
+      let apiKey = clientApiKey || process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey.trim() === '' || apiKey.toLowerCase() === 'free' || apiKey === 'MY_GEMINI_API_KEY') {
+        return res.status(400).json({ 
+          error: 'Missing or invalid GEMINI_API_KEY. To use the free tier, please open Settings -> Secrets, click the RED TRASH CAN icon next to GEMINI_API_KEY to completely delete the secret (do not just clear the text). After deleting it, the system will provide a free key automatically.' 
+        });
+      }
+      const ai = new GoogleGenAI({ apiKey });
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: `You are an expert Special Education Specialist.
+          Analyze the following IEP goals and merge them into a single, clean, and comprehensive goal.
+          Also merge their sub-skills (objectives) into a unified list, removing duplicates but keeping important steps.
+          Determine the most appropriate domain and skill level (Basic, Intermediate, Advanced) for the merged goal.
+          
+          Goals to merge:
+          ${JSON.stringify(goalsToMerge, null, 2)}`,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING, description: "The descriptive title or text of the merged goal" },
+              domain: { type: Type.STRING, description: "Category/Domain (e.g. Reading, Math, Behavior)" },
+              skillLevel: { type: Type.STRING, description: "Basic, Intermediate, or Advanced" },
+              trackingType: { type: Type.STRING, description: "percentage, frequency, or duration" },
+              objectives: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING, description: "Sub-skill or objective text" }
+                  },
+                  required: ["title"]
+                }
+              }
+            },
+            required: ["title", "domain", "skillLevel", "trackingType", "objectives"]
+          }
+        }
+      });
+
+      const text = response.text;
+      if (!text) throw new Error("No text returned from Gemini");
+      res.json(JSON.parse(text));
+    } catch (error: any) {
+      console.error('Error in /api/gemini/merge-goals:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/gemini/analyze-bank', async (req, res) => {
+    try {
+      const { goalBank, apiKey: clientApiKey } = req.body;
+      if (!goalBank || !Array.isArray(goalBank)) {
+        return res.status(400).json({ error: 'Provide a valid goalBank array' });
+      }
+
+      const { GoogleGenAI, Type } = await import('@google/genai');
+      let apiKey = clientApiKey || process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey.trim() === '' || apiKey.toLowerCase() === 'free' || apiKey === 'MY_GEMINI_API_KEY') {
+        return res.status(400).json({ 
+          error: 'Missing or invalid GEMINI_API_KEY.' 
+        });
+      }
+      const ai = new GoogleGenAI({ apiKey });
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: `You are an expert Special Education Specialist.
+          Analyze the following bank of IEP goals.
+          1. Find groups of goals that are very similar and should be merged.
+          2. For each group of similar goals, provide a recommended merged goal that combines their best aspects, and their sub-skills (objectives).
+          3. Ensure the merged goal is assigned to the correct domain, and evaluate its difficulty to assign a skill level (Basic, Intermediate, or Advanced).
+          
+          Goal Bank:
+          ${JSON.stringify(goalBank, null, 2)}
+          
+          Only return groups where merging is recommended (at least 2 similar goals).`,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              mergeProposals: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    originalGoalIds: { 
+                      type: Type.ARRAY, 
+                      items: { type: Type.STRING },
+                      description: "The IDs of the original goals that should be merged"
+                    },
+                    reason: { type: Type.STRING, description: "Why these goals should be merged" },
+                    mergedGoal: {
+                      type: Type.OBJECT,
+                      properties: {
+                        title: { type: Type.STRING },
+                        domain: { type: Type.STRING },
+                        skillLevel: { type: Type.STRING },
+                        trackingType: { type: Type.STRING },
+                        objectives: {
+                          type: Type.ARRAY,
+                          items: {
+                            type: Type.OBJECT,
+                            properties: {
+                              title: { type: Type.STRING }
+                            },
+                            required: ["title"]
+                          }
+                        }
+                      },
+                      required: ["title", "domain", "skillLevel", "trackingType", "objectives"]
+                    }
+                  },
+                  required: ["originalGoalIds", "reason", "mergedGoal"]
+                }
+              }
+            },
+            required: ["mergeProposals"]
+          }
+        }
+      });
+
+      const text = response.text;
+      if (!text) throw new Error("No text returned from Gemini");
+      res.json(JSON.parse(text));
+    } catch (error: any) {
+      console.error('Error in /api/gemini/analyze-bank:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
