@@ -170,8 +170,20 @@ export const DataEntry = () => {
   
   const [student, setStudent] = useState<Student | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   
   const [entryDate, setEntryDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
+  useEffect(() => {
+    if (selectedGoalId) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [selectedGoalId]);
 
   useEffect(() => {
     if (!studentId) return;
@@ -269,69 +281,115 @@ export const DataEntry = () => {
           </CardContent>
         </Card>
       ) : (
-        <Accordion type="multiple" className="w-full space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {goals.map(goal => (
-            <AccordionItem key={goal.id} value={goal.id} className="border border-slate-200 rounded-none shadow-[0_2px_8px_rgba(0,0,0,0.04)] bg-white overflow-hidden px-1">
-              <AccordionTrigger className="hover:no-underline py-4 px-4">
-                <div className="text-left flex-1 pr-6 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] uppercase font-bold tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded-none">
-                        {goal.domain}
-                      </span>
-                      <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-none ${
-                        goal.trackingType === 'percentage' ? 'bg-indigo-50 text-indigo-700' :
-                        goal.trackingType === 'frequency' ? 'bg-emerald-50 text-emerald-700' :
-                        'bg-amber-50 text-amber-700'
-                      }`}>
-                        {goal.trackingType}
-                      </span>
-                    </div>
-                    <div className="text-base font-semibold text-slate-900 leading-snug">{goal.title}</div>
-                  </div>
-                  <div className="text-sm font-medium text-slate-500 whitespace-nowrap hidden sm:block">
-                    {goal.objectives?.length || 0} objectives
-                  </div>
+            <Card key={goal.id} className="cursor-pointer hover:border-indigo-300 transition-colors bg-white shadow-sm" onClick={() => setSelectedGoalId(goal.id)}>
+              <CardContent className="p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs uppercase font-bold tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
+                    {goal.domain}
+                  </span>
+                  <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md ${
+                    goal.trackingType === 'percentage' ? 'bg-indigo-50 text-indigo-700' :
+                    goal.trackingType === 'frequency' ? 'bg-emerald-50 text-emerald-700' :
+                    'bg-amber-50 text-amber-700'
+                  }`}>
+                    {goal.trackingType}
+                  </span>
                 </div>
-              </AccordionTrigger>
-              <AccordionContent className="pt-0 pb-4 px-4">
-                <div className="flex flex-col gap-3 mt-2">
-                  {(goal.objectives || []).map(obj => (
-                    <div key={obj.id} className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 p-4 rounded-none border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                      <div className="flex-1">
-                        <span className="text-sm font-medium text-slate-800">{obj.title}</span>
-                      </div>
-                      
-                      <div className="shrink-0 w-full lg:w-auto">
-                        {goal.trackingType === 'percentage' && (
-                          <PercentageTracker onSave={(val) => handleSaveData(goal.id, obj.id, val)} />
-                        )}
-
-                        {goal.trackingType === 'frequency' && (
-                          <Button 
-                            onClick={() => handleSaveData(goal.id, obj.id, 1)}
-                            className="w-full lg:w-auto rounded-none h-10 px-6 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm"
-                          >
-                            <Plus className="w-4 h-4 mr-1.5" /> Log Occurence (+1)
-                          </Button>
-                        )}
-
-                        {goal.trackingType === 'duration' && (
-                          <DurationTracker onSave={(val) => handleSaveData(goal.id, obj.id, val)} />
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {(!goal.objectives || goal.objectives.length === 0) && (
-                    <div className="text-sm text-slate-500 text-center py-4 bg-slate-50 rounded-none border border-dashed border-slate-200">
-                      No objectives found for this goal.
-                    </div>
-                  )}
+                <div className="text-base font-semibold text-slate-900 leading-snug line-clamp-2">
+                  {goal.title}
                 </div>
-              </AccordionContent>
-            </AccordionItem>
+                <div className="text-sm font-medium text-slate-500">
+                  {goal.objectives?.length || 0} objectives
+                </div>
+              </CardContent>
+            </Card>
           ))}
-        </Accordion>
+        </div>
+      )}
+
+      {selectedGoalId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            {(() => {
+              const goal = goals.find(g => g.id === selectedGoalId);
+              if (!goal) return null;
+              return (
+                <>
+                  <div className="flex items-start justify-between p-4 sm:p-6 border-b bg-slate-50/50">
+                    <div className="flex-1 min-w-0 pr-4">
+                      <Accordion type="single" collapsible className="w-full">
+                        <AccordionItem value="goal-info" className="border-none">
+                          <AccordionTrigger className="py-0 hover:no-underline flex gap-2 text-left">
+                            <div className="flex flex-col items-start gap-2 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs uppercase font-bold tracking-wider bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md">
+                                  {goal.domain}
+                                </span>
+                                <span className={`text-xs uppercase font-bold tracking-wider px-2 py-0.5 rounded-md ${
+                                  goal.trackingType === 'percentage' ? 'bg-indigo-50 text-indigo-700' :
+                                  goal.trackingType === 'frequency' ? 'bg-emerald-50 text-emerald-700' :
+                                  'bg-amber-50 text-amber-700'
+                                }`}>
+                                  {goal.trackingType}
+                                </span>
+                              </div>
+                              <h2 className="text-sm sm:text-base font-bold text-slate-900 line-clamp-2 md:line-clamp-1">{goal.title}</h2>
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent className="pt-3 pb-0 text-slate-700 text-sm sm:text-base leading-relaxed">
+                            {goal.title}
+                          </AccordionContent>
+                        </AccordionItem>
+                      </Accordion>
+                    </div>
+                    <Button variant="ghost" size="icon" className="rounded-full shrink-0 -mt-1" onClick={() => setSelectedGoalId(null)}>
+                      <X className="w-5 h-5 text-slate-500" />
+                    </Button>
+                  </div>
+                  
+                  <div className="p-6 overflow-y-auto overscroll-contain touch-pan-y bg-slate-50 flex-1">
+                    <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-4">Record Data</h3>
+                    <div className="flex flex-col gap-4">
+                      {(goal.objectives || []).map(obj => (
+                        <div key={obj.id} className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 p-5 rounded-xl border border-slate-200 bg-white shadow-sm">
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-slate-900">{obj.title}</span>
+                          </div>
+                          
+                          <div className="shrink-0 w-full lg:w-auto">
+                            {goal.trackingType === 'percentage' && (
+                              <PercentageTracker onSave={(val) => handleSaveData(goal.id, obj.id, val)} />
+                            )}
+
+                            {goal.trackingType === 'frequency' && (
+                              <Button 
+                                onClick={() => handleSaveData(goal.id, obj.id, 1)}
+                                className="w-full lg:w-auto rounded-md h-10 px-6 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm"
+                              >
+                                <Plus className="w-4 h-4 mr-1.5" /> Log Occurence (+1)
+                              </Button>
+                            )}
+
+                            {goal.trackingType === 'duration' && (
+                              <DurationTracker onSave={(val) => handleSaveData(goal.id, obj.id, val)} />
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {(!goal.objectives || goal.objectives.length === 0) && (
+                        <div className="text-sm text-slate-500 text-center py-8 bg-white rounded-xl border border-dashed border-slate-200">
+                          No objectives found for this goal.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
       )}
     </div>
   );

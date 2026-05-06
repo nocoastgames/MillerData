@@ -54,6 +54,17 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
   const [aiPromptPresentLevels, setAiPromptPresentLevels] = useState('');
   const [showAiGenerator, setShowAiGenerator] = useState(false);
 
+  useEffect(() => {
+    if (showAiGenerator) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showAiGenerator]);
+
   const handleGenerateAIGoal = async () => {
     if (!aiPromptSkills.trim()) {
       toast.error('Please enter the desired skills or needs');
@@ -736,7 +747,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
       )}
       {showAiGenerator && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-background border rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-background border rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto overscroll-contain touch-pan-y animate-in fade-in zoom-in-95 duration-200">
             <div className="sticky top-0 bg-background/95 backdrop-blur z-10 border-b px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
