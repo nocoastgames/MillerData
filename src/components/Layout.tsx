@@ -10,9 +10,12 @@ import {
   LogOut, 
   Menu,
   X,
-  UploadCloud
+  UploadCloud,
+  Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { APP_VERSION } from '../version';
 import { SidebarLinkDevice } from './SidebarLinkDevice';
 
@@ -21,6 +24,13 @@ export const Layout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+  const [apiKeyInput, setApiKeyInput] = React.useState(localStorage.getItem('GEMINI_API_KEY') || '');
+
+  const handleSaveSettings = () => {
+    localStorage.setItem('GEMINI_API_KEY', apiKeyInput);
+    setIsSettingsOpen(false);
+  };
 
   const handleSignOut = async () => {
     await signOut(auth);
@@ -95,6 +105,14 @@ export const Layout = () => {
           </div>
           <Button 
             variant="ghost" 
+            className="w-full justify-start text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground rounded-none mb-1"
+            onClick={() => setIsSettingsOpen(true)}
+          >
+            <Settings className="w-5 h-5 mr-3" />
+            App Settings
+          </Button>
+          <Button 
+            variant="ghost" 
             className="w-full justify-start text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground rounded-none"
             onClick={handleSignOut}
           >
@@ -120,6 +138,39 @@ export const Layout = () => {
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
+      )}
+
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-background border rounded-2xl shadow-xl w-full max-w-md">
+            <div className="p-6 border-b flex justify-between items-center">
+              <h2 className="text-xl font-bold text-slate-900">App Settings</h2>
+              <button onClick={() => setIsSettingsOpen(false)}>
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="globalApiKey">Gemini API Key</Label>
+                <Input 
+                  id="globalApiKey"
+                  type="password"
+                  placeholder="Enter your Gemini API key"
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                />
+                <p className="text-xs text-slate-500">
+                  This key will be used for all AI features (Goal Generation, IEP Upload, etc.). This overrides the server default.
+                </p>
+              </div>
+            </div>
+            <div className="p-6 border-t bg-slate-50 flex justify-end gap-3 rounded-b-2xl">
+              <Button variant="outline" onClick={() => setIsSettingsOpen(false)}>Cancel</Button>
+              <Button onClick={handleSaveSettings}>Save Settings</Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

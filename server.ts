@@ -8,6 +8,15 @@ import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+function cleanJsonText(text: string): string {
+  if (!text) return text;
+  text = text.trim();
+  if (text.startsWith('```json')) text = text.replace(/^```json/, '');
+  if (text.startsWith('```')) text = text.replace(/^```/, '');
+  if (text.endsWith('```')) text = text.replace(/```$/, '');
+  return text.trim();
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -102,7 +111,7 @@ async function startServer() {
       const { GoogleGenAI, Type } = await import('@google/genai');
       
       let apiKey = clientApiKey || process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey.trim() === '' || apiKey.toLowerCase() === 'free' || apiKey === 'MY_GEMINI_API_KEY') {
+      if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
         return res.status(400).json({ 
           error: 'Missing or invalid GEMINI_API_KEY. To use the free tier, please open Settings -> Secrets, click the RED TRASH CAN icon next to GEMINI_API_KEY to completely delete the secret (do not just clear the text). After deleting it, the system will provide a free key automatically.' 
         });
@@ -182,7 +191,7 @@ Extract the student's information and all IEP goals from the provided document (
       const text = response.text;
       if (!text) throw new Error("No text returned from Gemini");
       
-      const json = JSON.parse(text);
+      const json = JSON.parse(cleanJsonText(text));
       res.json(json);
     } catch (error: any) {
       console.error('Error in /api/gemini/extract-iep:', error);
@@ -203,7 +212,7 @@ Extract the student's information and all IEP goals from the provided document (
 
       const { GoogleGenAI, Type } = await import('@google/genai');
       let apiKey = clientApiKey || process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey.trim() === '' || apiKey.toLowerCase() === 'free' || apiKey === 'MY_GEMINI_API_KEY') {
+      if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
         return res.status(400).json({ 
           error: 'Missing or invalid GEMINI_API_KEY. To use the free tier, please open Settings -> Secrets, click the RED TRASH CAN icon next to GEMINI_API_KEY to completely delete the secret (do not just clear the text). After deleting it, the system will provide a free key automatically.' 
         });
@@ -246,7 +255,7 @@ Extract the student's information and all IEP goals from the provided document (
 
       const text = response.text;
       if (!text) throw new Error("No text returned from Gemini");
-      res.json(JSON.parse(text));
+      res.json(JSON.parse(cleanJsonText(text)));
     } catch (error: any) {
       console.error('Error in /api/gemini/merge-goals:', error);
       res.status(500).json({ error: error.message });
@@ -262,7 +271,7 @@ Extract the student's information and all IEP goals from the provided document (
 
       const { GoogleGenAI, Type } = await import('@google/genai');
       let apiKey = clientApiKey || process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey.trim() === '' || apiKey.toLowerCase() === 'free' || apiKey === 'MY_GEMINI_API_KEY') {
+      if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
         return res.status(400).json({ 
           error: 'Missing or invalid GEMINI_API_KEY. To use the free tier, please open Settings -> Secrets, click the RED TRASH CAN icon next to GEMINI_API_KEY to completely delete the secret (do not just clear the text). After deleting it, the system will provide a free key automatically.' 
         });
@@ -314,7 +323,7 @@ Extract the student's information and all IEP goals from the provided document (
         throw new Error('No response from Gemini API');
       }
 
-      const parsedData = JSON.parse(response.text);
+      const parsedData = JSON.parse(cleanJsonText(response.text));
       res.json(parsedData);
     } catch (error: any) {
       console.error('Error in /api/gemini/generate-goal:', error);
@@ -336,7 +345,7 @@ Extract the student's information and all IEP goals from the provided document (
 
       const { GoogleGenAI, Type } = await import('@google/genai');
       let apiKey = clientApiKey || process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey.trim() === '' || apiKey.toLowerCase() === 'free' || apiKey === 'MY_GEMINI_API_KEY') {
+      if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
         return res.status(400).json({ 
           error: 'Missing or invalid GEMINI_API_KEY.' 
         });
@@ -403,7 +412,7 @@ Extract the student's information and all IEP goals from the provided document (
 
       const text = response.text;
       if (!text) throw new Error("No text returned from Gemini");
-      res.json(JSON.parse(text));
+      res.json(JSON.parse(cleanJsonText(text)));
     } catch (error: any) {
       console.error('Error in /api/gemini/analyze-bank:', error);
       res.status(500).json({ error: error.message });

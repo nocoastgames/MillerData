@@ -110,14 +110,21 @@ export const IEPUpload = () => {
         body: JSON.stringify({
           mimeType: f.type,
           data: base64,
-          apiKey: customApiKey || undefined,
+          apiKey: customApiKey || localStorage.getItem('GEMINI_API_KEY') || undefined,
           goalBank: goalBankData
         })
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to extract data');
+        const text = await res.text();
+        let errorMsg = 'Failed to extract data';
+        try {
+          const err = JSON.parse(text);
+          errorMsg = err.error || errorMsg;
+        } catch {
+          errorMsg = text.includes('<!') ? `Server error (${res.status}): Please try again later.` : text;
+        }
+        throw new Error(errorMsg);
       }
 
       const json = await res.json();

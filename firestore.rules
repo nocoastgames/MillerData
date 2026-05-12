@@ -95,11 +95,12 @@ service cloud.firestore {
     }
 
     function isValidGoal(data) {
-      return hasOnlyAllowedFields(['studentId', 'title', 'domain', 'trackingType', 'masteryCriteria', 'objectives', 'status']) &&
+      return hasOnlyAllowedFields(['studentId', 'title', 'domain', 'skillLevel', 'trackingType', 'masteryCriteria', 'objectives', 'status']) &&
              hasRequiredFields(['studentId', 'title', 'domain', 'trackingType', 'masteryCriteria', 'objectives', 'status']) &&
              data.studentId is string && data.studentId.size() > 0 && data.studentId.size() < 100 &&
              data.title is string && data.title.size() > 0 && data.title.size() < 500 &&
              data.domain is string && data.domain.size() > 0 && data.domain.size() < 100 &&
+             (!('skillLevel' in data) || (data.skillLevel is string && data.skillLevel.size() < 50)) &&
              data.trackingType in ['percentage', 'frequency', 'duration'] &&
              data.masteryCriteria is number && data.masteryCriteria >= 0 &&
              data.objectives is list && data.objectives.size() <= 50 &&
@@ -120,10 +121,11 @@ service cloud.firestore {
     }
 
     function isValidGoalBankItem(data) {
-      return hasOnlyAllowedFields(['title', 'domain', 'trackingType', 'defaultObjectives', 'status', 'submittedBy', 'submittedByName']) &&
+      return hasOnlyAllowedFields(['title', 'domain', 'skillLevel', 'trackingType', 'defaultObjectives', 'status', 'submittedBy', 'submittedByName']) &&
              hasRequiredFields(['title', 'domain', 'trackingType', 'defaultObjectives', 'status']) &&
              data.title is string && data.title.size() > 0 && data.title.size() < 500 &&
              data.domain is string && data.domain.size() > 0 && data.domain.size() < 100 &&
+             (!('skillLevel' in data) || (data.skillLevel is string && data.skillLevel.size() < 50)) &&
              data.trackingType in ['percentage', 'frequency', 'duration'] &&
              data.defaultObjectives is list && data.defaultObjectives.size() <= 50 &&
              data.status in ['pending', 'approved'];

@@ -41,9 +41,13 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
   });
   const [saveToBank, setSaveToBank] = useState(false);
 
-  // Merge Mode States
-  const [isMergeMode, setIsMergeMode] = useState(false);
-  const [selectedForMerge, setSelectedForMerge] = useState<string[]>([]);
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [selectedForAction, setSelectedForAction] = useState<string[]>([]);
+  const [bulkCategory, setBulkCategory] = useState<string>('');
+  
+  const [isCategoryMergeModalOpen, setIsCategoryMergeModalOpen] = useState(false);
+  const [categoryMergeSource, setCategoryMergeSource] = useState<string>('');
+  const [categoryMergeTarget, setCategoryMergeTarget] = useState<string>('');
   const [isMerging, setIsMerging] = useState(false);
   const [mergeProposals, setMergeProposals] = useState<any[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -80,12 +84,20 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
           domain: newGoal.domain || 'Communication',
           skills: aiPromptSkills,
           presentLevels: aiPromptPresentLevels,
-          studentAge: student ? `${student.grade || ''}` : ''
+          studentAge: student ? `${student.grade || ''}` : '',
+          apiKey: localStorage.getItem('GEMINI_API_KEY') || ''
         })
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to generate goal');
+        const text = await res.text();
+        let errorMsg = 'Failed to generate goal';
+        try {
+          const err = JSON.parse(text);
+          errorMsg = err.error || errorMsg;
+        } catch {
+          errorMsg = text.includes('<!') ? `Server error (${res.status}): Please try again later.` : text;
+        }
+        throw new Error(errorMsg);
       }
       
       const generated = await res.json();
@@ -252,18 +264,25 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
   };
 
   const handleAIMergeSelected = async () => {
-    if (selectedForMerge.length < 2) return;
+    if (selectedForAction.length < 2) return;
     setIsMerging(true);
     try {
-      const dbGoals = goalBank.filter(g => selectedForMerge.includes(g.id));
+      const dbGoals = goalBank.filter(g => selectedForAction.includes(g.id));
       const res = await fetch('/api/gemini/merge-goals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goalsToMerge: dbGoals })
+        body: JSON.stringify({ goalsToMerge: dbGoals, apiKey: localStorage.getItem('GEMINI_API_KEY') || '' })
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to merge goals');
+        const text = await res.text();
+        let errorMsg = 'Failed to merge goals';
+        try {
+          const err = JSON.parse(text);
+          errorMsg = err.error || errorMsg;
+        } catch {
+          errorMsg = text.includes('<!') ? `Server error (${res.status}): Please try again later.` : text;
+        }
+        throw new Error(errorMsg);
       }
       
       const mergedGoal = await res.json();
@@ -276,8 +295,8 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
         objectives: mergedGoal.objectives.map((o: any) => ({ ...o, id: Math.random().toString(36).substring(7) }))
       });
       // Clear selection and mode
-      setSelectedForMerge([]);
-      setIsMergeMode(false);
+      setSelectedForAction([]);
+      setIsAdminMode(false);
       setIsBuildingBankItem(true);
       setEditingBankItemId(null);
       setIsBuilding(true);
@@ -295,11 +314,18 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
       const res = await fetch('/api/gemini/analyze-bank', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goalBank: filteredBank })
+        body: JSON.stringify({ goalBank: filteredBank, apiKey: localStorage.getItem('GEMINI_API_KEY') || '' })
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to analyze bank');
+        const text = await res.text();
+        let errorMsg = 'Failed to analyze bank';
+        try {
+          const err = JSON.parse(text);
+          errorMsg = err.error || errorMsg;
+        } catch {
+          errorMsg = text.includes('<!') ? `Server error (${res.status}): Please try again later.` : text;
+        }
+        throw new Error(errorMsg);
       }
       const data = await res.json();
       setMergeProposals(data.mergeProposals || []);
@@ -330,8 +356,8 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
     setMergeProposals(mergeProposals.filter(p => p !== proposal));
   };
   
-  const handleToggleMergeSelection = (id: string) => {
-    setSelectedForMerge(prev => 
+  const handleToggleActionSelection = (id: string) => {
+    setSelectedForAction(prev => 
       prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
     );
   };
@@ -474,9 +500,93 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
     });
   };
 
+  const handleBulkChangeCategory = async () => {
+    if (selectedForAction.length === 0 || !bulkCategory) return;
+    try {
+      const promises = selectedForAction.map(id => updateDoc(doc(db, 'goalBank', id), { domain: bulkCategory }));
+      await Promise.all(promises);
+      toast.success(`Successfully moved ${selectedForAction.length} goals to ${bulkCategory}`);
+      setSelectedForAction([]);
+      setBulkCategory('');
+    } catch (error) {
+      toast.error('Failed to move goals');
+    }
+  };
+
+  const handleMergeCategories = async () => {
+    if (!categoryMergeSource || !categoryMergeTarget || categoryMergeSource === categoryMergeTarget) {
+      toast.error('Please select two distinct categories to merge');
+      return;
+    }
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Merge Categories',
+      message: `Are you sure you want to merge ALL goals in '${categoryMergeSource}' into '${categoryMergeTarget}'? This will permanently update these goals.`,
+      onConfirm: async () => {
+        try {
+          const goalsToUpdate = goalBank.filter(g => normalizeDomain(g.domain || '') === categoryMergeSource);
+          const promises = goalsToUpdate.map(g => updateDoc(doc(db, 'goalBank', g.id), { domain: categoryMergeTarget }));
+          await Promise.all(promises);
+          toast.success(`Successfully merged ${goalsToUpdate.length} goals into ${categoryMergeTarget}`);
+          setIsCategoryMergeModalOpen(false);
+          setCategoryMergeSource('');
+          setCategoryMergeTarget('');
+        } catch (error) {
+          toast.error('Failed to merge categories');
+        }
+        setConfirmConfig(null);
+      }
+    });
+  };
+
   if (isBankView && !isBuilding) {
     return (
       <div className="max-w-5xl mx-auto space-y-6">
+        {isCategoryMergeModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-background border rounded-2xl shadow-xl w-full max-w-md animate-in fade-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 border-b flex items-center justify-between">
+                <h3 className="text-lg font-bold text-slate-900">Merge Categories</h3>
+                <Button variant="ghost" size="icon" onClick={() => setIsCategoryMergeModalOpen(false)} className="rounded-full">
+                  <X className="w-5 h-5 text-slate-500" />
+                </Button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="space-y-2">
+                  <Label>Source Category (To be merged & removed)</Label>
+                  <select 
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={categoryMergeSource}
+                    onChange={e => setCategoryMergeSource(e.target.value)}
+                  >
+                    <option value="">Select source category...</option>
+                    {availableDomains.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+                <div className="flex justify-center text-slate-400">
+                  <ArrowLeft className="w-5 h-5 rotate-[270deg]" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Target Category (To keep)</Label>
+                  <select 
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={categoryMergeTarget}
+                    onChange={e => setCategoryMergeTarget(e.target.value)}
+                  >
+                    <option value="">Select target category...</option>
+                    {availableDomains.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t bg-slate-50 flex justify-end gap-3 rounded-b-2xl">
+                <Button variant="outline" onClick={() => setIsCategoryMergeModalOpen(false)}>Cancel</Button>
+                <Button onClick={handleMergeCategories} disabled={!categoryMergeSource || !categoryMergeTarget || categoryMergeSource === categoryMergeTarget}>
+                  Merge Categories
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
         {confirmConfig && (
           <ConfirmModal 
             isOpen={confirmConfig.isOpen} 
@@ -494,16 +604,25 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
           <div className="flex gap-2">
             {(profile?.role === 'admin' || profile?.role === 'teacher' || profile?.role === 'editor') && (
               <>
+                {(profile?.role === 'admin' || profile?.role === 'editor') && (
+                  <Button 
+                    variant="outline"
+                    onClick={() => setIsCategoryMergeModalOpen(true)}
+                    className="rounded-full bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 border-amber-200"
+                  >
+                    Merge Categories
+                  </Button>
+                )}
                 <Button 
-                  variant={isMergeMode ? 'default' : 'outline'}
+                  variant={isAdminMode ? 'default' : 'outline'}
                   onClick={() => {
-                    setIsMergeMode(!isMergeMode);
-                    setSelectedForMerge([]);
+                    setIsAdminMode(!isAdminMode);
+                    setSelectedForAction([]);
                   }} 
                   className="rounded-full"
                 >
-                  <Merge className="w-4 h-4 mr-2" />
-                  {isMergeMode ? 'Cancel Merge' : 'Manual Merge'}
+                  <Settings className="w-4 h-4 mr-2" />
+                  {isAdminMode ? 'Exit Admin Tools' : 'Admin Tools'}
                 </Button>
                 <Button 
                   variant="outline"
@@ -527,25 +646,48 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
           </div>
         </div>
 
-        {isMergeMode && (
+        {isAdminMode && (
           <Card className="border-indigo-200 bg-indigo-50 shadow-sm sticky top-4 z-10">
             <CardHeader className="py-4">
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-lg text-indigo-900 flex items-center">
-                  <Merge className="w-5 h-5 mr-2" />
-                  Select Goals to Merge
+              <div className="flex flex-col md:flex-row gap-4 justify-between md:items-center">
+                <CardTitle className="text-lg text-indigo-900 flex items-center shrink-0">
+                  <Settings className="w-5 h-5 mr-2" />
+                  Bulk Admin Actions
                 </CardTitle>
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-medium text-indigo-700">
-                    {selectedForMerge.length} selected
+                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                  <span className="text-sm font-medium text-indigo-700 whitespace-nowrap">
+                    {selectedForAction.length} selected
                   </span>
+                  
+                  <div className="h-8 w-px bg-indigo-200 mx-2 hidden md:block"></div>
+                  
+                  <div className="flex items-center gap-2">
+                    <select 
+                      className="h-9 rounded-md border border-indigo-200 bg-white px-3 py-1 text-sm shrink-0"
+                      value={bulkCategory}
+                      onChange={(e) => setBulkCategory(e.target.value)}
+                    >
+                      <option value="">Move to Category...</option>
+                      {availableDomains.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                    <Button 
+                      onClick={handleBulkChangeCategory} 
+                      disabled={selectedForAction.length === 0 || !bulkCategory}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-md h-9 px-4 shrink-0"
+                    >
+                      Move
+                    </Button>
+                  </div>
+
+                  <div className="h-8 w-px bg-indigo-200 mx-2 hidden md:block"></div>
+
                   <Button 
                     onClick={handleAIMergeSelected} 
-                    disabled={selectedForMerge.length < 2 || isMerging}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full"
+                    disabled={selectedForAction.length < 2 || isMerging}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-md h-9 shrink-0"
                   >
-                    {isMerging ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wand2 className="w-4 h-4 mr-2" />}
-                    AI Merge Selected
+                    {isMerging ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Merge className="w-4 h-4 mr-2" />}
+                    Compare & Merge
                   </Button>
                 </div>
               </div>
@@ -553,7 +695,7 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
           </Card>
         )}
 
-        {mergeProposals.length > 0 && !isMergeMode && (
+        {mergeProposals.length > 0 && !isAdminMode && (
           <div className="space-y-4">
             <h2 className="text-xl font-semibold text-indigo-900 flex items-center">
               <Wand2 className="w-5 h-5 mr-2 text-indigo-600" />
@@ -659,10 +801,10 @@ export const GoalManagement = ({ isBankView = false }: { isBankView?: boolean })
                                     <CardHeader className="pb-2">
                                       <div className="flex justify-between items-start">
                                         <CardTitle className="text-lg leading-tight flex items-start gap-3">
-                                          {isMergeMode && (
+                                          {isAdminMode && (
                                             <Checkbox 
-                                              checked={selectedForMerge.includes(item.id)}
-                                              onCheckedChange={() => handleToggleMergeSelection(item.id)}
+                                              checked={selectedForAction.includes(item.id)}
+                                              onCheckedChange={() => handleToggleActionSelection(item.id)}
                                               className="mt-1"
                                             />
                                           )}
